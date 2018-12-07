@@ -15,7 +15,7 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
 
 ## Workflow:
 
-'''zmap ping scan &rarr; zmap port scan(s) &rarr; EternalBlue check (optional) &rarr; CSV'''
+*zmap ping scan &rarr; zmap port scan(s) &rarr; EternalBlue check (optional) &rarr; CSV*
 
 
 ## Usage:
