@@ -13,6 +13,7 @@ import threading
 from time import sleep
 import subprocess as sp
 from pathlib import Path
+from datetime import datetime
 import xml.etree.cElementTree as xml # for parsing Nmap output
 
 
@@ -23,6 +24,7 @@ class Zmap:
         self.targets                    = targets
         self.hosts                      = dict()
         self.eternal_blue_count         = 0
+        self.scanned_eternal_blue       = False
         self.ports_scanned              = set()
         self.host_discovery_finished    = False
 
@@ -83,6 +85,8 @@ class Zmap:
                 self.hosts[ip] = Host(ip)
                 self.hosts[ip]['Vulnerable to EternalBlue'] = 'Yes'
 
+        self.scanned_eternal_blue = True
+
 
     def report(self):
 
@@ -93,14 +97,13 @@ class Zmap:
         for subnet in self._count_subnets():
             print('\t{:<15}{:<10}'.format(subnet[0], ' ({:,})'.format(subnet[1])))
 
-        print('')
-
         if self.eternal_blue_count > 0:
+            print('')
             print('[+] Vulnerable to EternalBlue: {:,}\n'.format(self.eternal_blue_count))
             for host in self.hosts.values():
                 if host['Vulnerable to EternalBlue'] == 'Yes':
                     print('\t{}'.format(str(host)))
-        else:
+        elif self.scanned_eternal_blue:
             print('[+] No systems found vulnerable to EternalBlue')
 
         print('')
@@ -334,7 +337,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser("Scan private IP ranges, output to CSV")
     parser.add_argument('-t', '--targets', nargs='+', default=['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'], help='target network(s) to scan', metavar='STR')
-    parser.add_argument('--bandwidth',      default=default_bandwidth,      help='max egress bandwidth (default {})'.format(default_bandwidth), metavar='STR')
+    parser.add_argument('-B', '--bandwidth', default=default_bandwidth,     help='max egress bandwidth (default {})'.format(default_bandwidth), metavar='STR')
     parser.add_argument('--blacklist',      default=None,                   help='a file containing hosts to exclude from scanning', metavar='FILE')
     parser.add_argument('-w', '--csv-file',                                 help='output CSV file', metavar='CSV_FILE')
     parser.add_argument('-f', '--start-fresh',        action='store_true',  help='don\'t load results from previous scans')
@@ -348,21 +351,32 @@ if __name__ == '__main__':
         options.targets = list(set(options.targets))
         options.targets.sort()
 
-
         if options.work_dir is None:
             # unique identifier based on scan targets
             scan_uid = '_'.join([t.replace('/', '-') for t in options.targets])
             options.work_dir = default_work_dir / scan_uid
-            options.work_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
-        
+
+        # resolve symlinks
+        options.work_dir = options.work_dir.resolve()
+
+        # default CSV output
         if options.csv_file is None:
             options.csv_file = options.work_dir / 'asset_inventory.csv'
 
+        # if starting fresh rename working directory to ".bak"
+        if options.start_fresh:
+            backup_work_dir = Path(str(options.work_dir) + '_{date:%Y-%m-%d_%H:%M:%S}.bak'.format( date=datetime.now() ))
+            try:
+                options.work_dir.rename(backup_work_dir)
+            except FileNotFoundError:
+                pass
 
+        # create working directory if it doesn't exist
+        options.work_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+        # try to load "Zmap" object from pickled state
         saved_state = str(options.work_dir / '.state')
         try:
-            if options.start_fresh:
-                Path(saved_state).rename(saved_state + '.bak')
 
             with open(saved_state, 'rb') as f:
                 z = pickle.load(f)
@@ -373,7 +387,7 @@ if __name__ == '__main__':
             print('[+] No state found at {}, starting fresh'.format(saved_state))
             z = Zmap(options.targets, options.bandwidth, work_dir=options.work_dir, blacklist=options.blacklist)
 
-
+        # write CSV file
         with open(options.csv_file, 'w', newline='') as f:
             csvfile = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname', 'Vulnerable to EternalBlue'])
             csvfile.writeheader()
@@ -385,13 +399,17 @@ if __name__ == '__main__':
             for host in z.hosts_sorted():
                 csvfile.writerow(host)
 
+        # check for EternalBlue
         if options.check_eternal_blue:
             z.check_eternal_blue()
 
+        # scan additional ports, if requested
+        # only alive hosts are scanned
         if options.ports is not None:
             for port in options.ports:
                 z.scan_online_hosts(port)
 
+        # print summary
         z.report()
 
         print('[+] CSV file written to {}'.format(options.csv_file))
@@ -408,6 +426,8 @@ if __name__ == '__main__':
     finally:
         try:
             z.stop()
+
+            # pickle Zmap object to save state
             with open(saved_state, 'wb') as f:
                 pickle.dump(z, f)
         except:
