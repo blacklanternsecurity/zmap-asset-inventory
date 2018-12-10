@@ -100,7 +100,7 @@ Dec 07 14:31:59.260 [INFO] csv: no output file selected, will use stdout
 [+] 192.168.1.210:445    ldap.evilcorp.local
 [+] 192.168.1.200:445    lt_66.evilcorp.local
 [+] 192.168.1.220:445    lt_73.evilcorp.local
- 0:08 100% (1s left); send: 18 done (170 p/s avg); recv: 3 0 p/s (0 p/s avg); drops: 0 p/s (0 p/s avg); hitrate: 16.67%
+ 0:08 100% (1s left); send: 18 done (170 p/s avg); recv: 14 0 p/s (0 p/s avg); drops: 0 p/s (0 p/s avg); hitrate: 77.78%
 Dec 07 14:32:08.328 [INFO] zmap: completed
 
 [+] Running nmap:
