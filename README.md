@@ -23,17 +23,19 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
 ## Usage:
 ~~~
 # ./zmap_asset_inventory.py --help
-usage: Scan private IP ranges, output to CSV [-h] [-t STR [STR ...]]
-                                             [--bandwidth STR]
+./zmap_asset_inventory.py --help
+usage: Scan private IP ranges, output to CSV [-h] [-t STR [STR ...]] [-B STR]
                                              [--blacklist FILE] [-w CSV_FILE]
                                              [-f] [-p PORTS [PORTS ...]] [-e]
-                                             [--work-dir WORK_DIR]
+                                             [--work-dir DIR] [-d FILE]
+                                             [-n NETMASK]
 
 optional arguments:
   -h, --help            show this help message and exit
   -t STR [STR ...], --targets STR [STR ...]
                         target network(s) to scan
-  --bandwidth STR       max egress bandwidth (default 750K)
+  -B STR, --bandwidth STR
+                        max egress bandwidth (default 750K)
   --blacklist FILE      a file containing hosts to exclude from scanning
   -w CSV_FILE, --csv-file CSV_FILE
                         output CSV file
@@ -42,7 +44,11 @@ optional arguments:
                         port-scan online hosts
   -e, --check-eternal-blue
                         scan for EternalBlue
-  --work-dir WORK_DIR   custom working directory
+  --work-dir DIR        custom working directory
+  -d FILE, --diff FILE  show differences between scan results and IPs/networks
+                        from file
+  -n NETMASK, --netmask NETMASK
+                        summarize networks with this CIDR mask (default: 24)
 ~~~
 
 
