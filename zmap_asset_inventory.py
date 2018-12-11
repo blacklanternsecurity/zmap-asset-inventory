@@ -469,22 +469,26 @@ def main(options):
             stray_networks = []
 
             stray_networks = z.get_network_delta(options.diff, netmask=options.netmask)
+            stray_networks_csv = './network_diff_{date:%Y-%m-%d_%H%M%S}.csv'.format( date=datetime.now())
             print('')
             print('[+] {:,} active network(s) not found in {}'.format(len(stray_networks), str(options.diff)))
+            print('[+] Writing data to {}'.format(stray_networks_csv))
             print('=' * 50)
-            with open('./network_diff_{date:%Y-%m-%d_%H:%M:%S}.csv'.format( date=datetime.now()), 'w', newline='') as f:
-                csv_file = csv.DictWriter(f, fieldnames=['Network'])
+            with open(stray_networks_csv, 'w', newline='') as f:
+                csv_file = csv.DictWriter(f, fieldnames=['Network', 'Host Count'])
                 csv_file.writeheader()
                 for network in stray_networks:
-                    csv_file.writerow({'Network': str(network)})
+                    csv_file.writerow({'Network': str(network[0]), 'Host Count': str(network[1])})
                     #print('\t{:<16}{}'.format(str(network[0]), network[1]))
                     print('\t{:<19}{:<10}'.format(str(network[0]), ' ({:,})'.format(network[1])))
 
             stray_hosts = z.get_host_delta(options.diff)
+            stray_hosts_csv = './host_diff_{date:%Y-%m-%d_%H%M%S}.csv'.format( date=datetime.now())
             print('')
             print('[+] {:,} alive host(s) not found in {}'.format(len(stray_hosts), str(options.diff)))
+            print('[+] Writing data to {}'.format(stray_hosts_csv))
             print('=' * 50)
-            with open('./host_diff_{date:%Y-%m-%d_%H:%M:%S}.csv'.format( date=datetime.now()), 'w', newline='') as f:
+            with open(stray_hosts_csv, 'w', newline='') as f:
                 csv_file = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname'])
                 csv_file.writeheader()
                 for host in stray_hosts:
