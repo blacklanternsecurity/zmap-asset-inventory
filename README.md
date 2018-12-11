@@ -23,7 +23,6 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
 ## Usage:
 ~~~
 # ./zmap_asset_inventory.py --help
-./zmap_asset_inventory.py --help
 usage: Scan private IP ranges, output to CSV [-h] [-t STR [STR ...]] [-B STR]
                                              [--blacklist FILE] [-w CSV_FILE]
                                              [-f] [-p PORTS [PORTS ...]] [-e]
