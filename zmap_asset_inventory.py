@@ -579,10 +579,12 @@ if __name__ == '__main__':
 
         assert 0 <= options.netmask <=32, "Invalid netmask"
 
+        scan_uid = '_'.join([str(t).replace('/', '-') for t in options.targets])
         if options.work_dir is None:
             # unique identifier based on scan targets
-            scan_uid = '_'.join([str(t).replace('/', '-') for t in options.targets])
             options.work_dir = default_work_dir / scan_uid
+        else:
+            options.work_dir = options.work_dir / scan_uid
 
 
         main(options)
