@@ -138,8 +138,7 @@ class Zmap:
                 self.secondary_zmap_process = sp.Popen(zmap_command, stdout=sp.PIPE)
                 sleep(2)
 
-                print('')
-                print('[+] Writing port {} results to {}'.format(port, zmap_out_file))
+                open_port_count = 0
 
                 with open(zmap_out_file, 'w') as f:
                     for line in io.TextIOWrapper(self.secondary_zmap_process.stdout, encoding='utf-8'):
@@ -147,13 +146,19 @@ class Zmap:
                         print('[+] {:<23}{:<10}'.format('{}:{}'.format(self.hosts[ip]['IP Address'], port), self.hosts[ip]['Hostname']))
                         f.write(ip + '\n')
                         self.hosts[ip].open_ports.add(port)
+                        open_port_count += 1
+
+                print('')
+                print('[+] Wrote port {} results to {}'.format(port, zmap_out_file))
+                print('[+] {:,} hosts with port {} open'.format(open_port_count, port))
 
             except sp.CalledProcessError as e:
                 sys.stderr.write('[!] Error launching zmap: {}\n'.format(str(e)))
                 sys.exit(1)
 
-            self.secondary_zmap_started = False
-            self.secondary_zmap_process = None
+            finally:
+                self.secondary_zmap_started = False
+                self.secondary_zmap_process = None
 
         return zmap_out_file
 
