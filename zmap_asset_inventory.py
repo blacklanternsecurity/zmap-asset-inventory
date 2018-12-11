@@ -138,6 +138,9 @@ class Zmap:
                 self.secondary_zmap_process = sp.Popen(zmap_command, stdout=sp.PIPE)
                 sleep(2)
 
+                print('')
+                print('[+] Writing port {} results to {}'.format(port, zmap_out_file))
+
                 with open(zmap_out_file, 'w') as f:
                     for line in io.TextIOWrapper(self.secondary_zmap_process.stdout, encoding='utf-8'):
                         ip = line.strip()
@@ -403,116 +406,117 @@ def main(options):
         sys.stderr.write('[!] Must be root\n')
         sys.exit(2)
 
+
+
+    # resolve symlinks
+    options.work_dir = options.work_dir.resolve()
+
+    # default CSV output
+    if options.csv_file is None:
+        options.csv_file = options.work_dir / 'asset_inventory.csv'
+
+    # if starting fresh rename working directory to ".bak"
+    if options.start_fresh:
+        backup_work_dir = Path(str(options.work_dir) + '_{date:%Y-%m-%d_%H:%M:%S}.bak'.format( date=datetime.now() ))
+        try:
+            old_dir = str(options.work_dir)
+            options.work_dir.rename(backup_work_dir)
+            print('[+] Backed up {} to {}'.format(old_dir, str(backup_work_dir)))
+        except FileNotFoundError:
+            pass
+
+    # create working directory if it doesn't exist
+    options.work_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    # try to load "Zmap" object from pickled state
+    saved_state = str(options.work_dir / '.state')
     try:
 
-        # resolve symlinks
-        options.work_dir = options.work_dir.resolve()
+        with open(saved_state, 'rb') as f:
+            z = pickle.load(f)
+            print('[+] Loaded saved state from {}'.format(saved_state))
+            z.update_config(options.bandwidth, work_dir=options.work_dir, blacklist=options.blacklist)
 
-        # default CSV output
-        if options.csv_file is None:
-            options.csv_file = options.work_dir / 'asset_inventory.csv'
+    except (FileNotFoundError, EOFError):
+        print('[+] No state found at {}, starting fresh'.format(saved_state))
+        z = Zmap(options.targets, options.bandwidth, work_dir=options.work_dir, blacklist=options.blacklist)
 
-        # if starting fresh rename working directory to ".bak"
-        if options.start_fresh:
-            backup_work_dir = Path(str(options.work_dir) + '_{date:%Y-%m-%d_%H:%M:%S}.bak'.format( date=datetime.now() ))
-            try:
-                old_dir = str(options.work_dir)
-                options.work_dir.rename(backup_work_dir)
-                print('[+] Backed up {} to {}'.format(old_dir, str(backup_work_dir)))
-            except FileNotFoundError:
-                pass
+    # write CSV file
+    with open(options.csv_file, 'w', newline='') as f:
+        csvfile = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname', 'Vulnerable to EternalBlue'])
+        csvfile.writeheader()
 
-        # create working directory if it doesn't exist
-        options.work_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
-
-        # try to load "Zmap" object from pickled state
-        saved_state = str(options.work_dir / '.state')
-        try:
-
-            with open(saved_state, 'rb') as f:
-                z = pickle.load(f)
-                print('[+] Loaded saved state from {}'.format(saved_state))
-                z.update_config(options.bandwidth, work_dir=options.work_dir, blacklist=options.blacklist)
-
-        except (FileNotFoundError, EOFError):
-            print('[+] No state found at {}, starting fresh'.format(saved_state))
-            z = Zmap(options.targets, options.bandwidth, work_dir=options.work_dir, blacklist=options.blacklist)
-
-        # write CSV file
-        with open(options.csv_file, 'w', newline='') as f:
-            csvfile = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname', 'Vulnerable to EternalBlue'])
-            csvfile.writeheader()
-
-            # make sure initial discovery scan has completed
-            for host in z:
-                pass
-
-            for host in z.hosts_sorted():
-                csvfile.writerow(host)
-
-        # check for EternalBlue
-        if options.check_eternal_blue:
-            z.check_eternal_blue()
-
-        # scan additional ports, if requested
-        # only alive hosts are scanned
-        if options.ports is not None:
-            for port in options.ports:
-                z.scan_online_hosts(port)
-
-        # print summary
-        z.report(netmask=options.netmask)
-
-        # calculate deltas if requested:
-        if options.diff:
-            stray_hosts = []
-            stray_networks = []
-
-            stray_networks = z.get_network_delta(options.diff, netmask=options.netmask)
-            stray_networks_csv = './network_diff_{date:%Y-%m-%d_%H%M%S}.csv'.format( date=datetime.now())
-            print('')
-            print('[+] {:,} active network(s) not found in {}'.format(len(stray_networks), str(options.diff)))
-            print('[+] Writing data to {}'.format(stray_networks_csv))
-            print('=' * 50)
-            with open(stray_networks_csv, 'w', newline='') as f:
-                csv_file = csv.DictWriter(f, fieldnames=['Network', 'Host Count'])
-                csv_file.writeheader()
-                for network in stray_networks:
-                    csv_file.writerow({'Network': str(network[0]), 'Host Count': str(network[1])})
-                    #print('\t{:<16}{}'.format(str(network[0]), network[1]))
-                    print('\t{:<19}{:<10}'.format(str(network[0]), ' ({:,})'.format(network[1])))
-
-            stray_hosts = z.get_host_delta(options.diff)
-            stray_hosts_csv = './host_diff_{date:%Y-%m-%d_%H%M%S}.csv'.format( date=datetime.now())
-            print('')
-            print('[+] {:,} alive host(s) not found in {}'.format(len(stray_hosts), str(options.diff)))
-            print('[+] Writing data to {}'.format(stray_hosts_csv))
-            print('=' * 50)
-            with open(stray_hosts_csv, 'w', newline='') as f:
-                csv_file = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname'])
-                csv_file.writeheader()
-                for host in stray_hosts:
-                    host = z.hosts[str(host)]
-                    csv_file.writerow({'IP Address': host['IP Address'], 'Hostname': host['Hostname']})
-                    print('\t{}'.format(str(host)))
-
-            print('\n')
-            # if more than 5 percent of hosts are strays, or you have more than one stray network
-            if len(stray_hosts)/len(z.hosts) > .05 or len(stray_networks) > 1:
-                print(' "Your asset management is bad and you should feel bad"')
-                print('')
-
-        print('[+] CSV file written to {}'.format(options.csv_file))
-
-    finally:
-        try:
-            z.stop()
-
-            # pickle Zmap object to save state
-            with open(saved_state, 'wb') as f:
-                pickle.dump(z, f)
-        except:
+        # make sure initial discovery scan has completed
+        for host in z:
             pass
+
+        for host in z.hosts_sorted():
+            csvfile.writerow(host)
+
+    # check for EternalBlue
+    if options.check_eternal_blue:
+        z.check_eternal_blue()
+
+    # scan additional ports, if requested
+    # only alive hosts are scanned
+    if options.ports is not None:
+        for port in options.ports:
+            z.scan_online_hosts(port)
+
+    # print summary
+    z.report(netmask=options.netmask)
+
+    # calculate deltas if requested:
+    if options.diff:
+        stray_hosts = []
+        stray_networks = []
+
+        stray_networks = z.get_network_delta(options.diff, netmask=options.netmask)
+        stray_networks_csv = './network_diff_{date:%Y-%m-%d_%H%M%S}.csv'.format( date=datetime.now())
+        print('')
+        print('[+] {:,} active network(s) not found in {}'.format(len(stray_networks), str(options.diff)))
+        print('[+] Writing data to {}'.format(stray_networks_csv))
+        print('=' * 50)
+        with open(stray_networks_csv, 'w', newline='') as f:
+            csv_file = csv.DictWriter(f, fieldnames=['Network', 'Host Count'])
+            csv_file.writeheader()
+            for network in stray_networks:
+                csv_file.writerow({'Network': str(network[0]), 'Host Count': str(network[1])})
+                #print('\t{:<16}{}'.format(str(network[0]), network[1]))
+                print('\t{:<19}{:<10}'.format(str(network[0]), ' ({:,})'.format(network[1])))
+
+        stray_hosts = z.get_host_delta(options.diff)
+        stray_hosts_csv = './host_diff_{date:%Y-%m-%d_%H%M%S}.csv'.format( date=datetime.now())
+        print('')
+        print('[+] {:,} alive host(s) not found in {}'.format(len(stray_hosts), str(options.diff)))
+        print('[+] Writing data to {}'.format(stray_hosts_csv))
+        print('=' * 50)
+        with open(stray_hosts_csv, 'w', newline='') as f:
+            csv_file = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname'])
+            csv_file.writeheader()
+            for host in stray_hosts:
+                host = z.hosts[str(host)]
+                csv_file.writerow({'IP Address': host['IP Address'], 'Hostname': host['Hostname']})
+                print('\t{}'.format(str(host)))
+
+        print('\n')
+        # if more than 5 percent of hosts are strays, or you have more than one stray network
+        if len(stray_hosts)/len(z.hosts) > .05 or len(stray_networks) > 1:
+            print(' "Your asset management is bad and you should feel bad"')
+            print('')
+
+    print('[+] CSV file written to {}'.format(options.csv_file))
+
+    try:
+        z.stop()
+
+        # pickle Zmap object to save state
+        with open(saved_state, 'wb') as f:
+            print('[+] Saving state to {}'.format(str(saved_state)))
+            pickle.dump(z, f)
+    except:
+        pass
+
 
 
 def str_to_network(s):
@@ -523,7 +527,7 @@ def str_to_network(s):
 
     try:
         if '-' in s:
-            start, end = s.split('-')
+            start, end = s.split('-')[:2]
             for i in ipaddress.summarize_address_range(ip_address(start), ip_address(end)):
                 yield i
         else:
