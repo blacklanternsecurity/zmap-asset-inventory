@@ -193,14 +193,8 @@ class Zmap:
 
         stray_hosts = self.get_host_delta(sub_range_file)
 
-        sub_ranges = set()
-        with open(sub_range_file) as f:
-            lines = [line.strip() for line in f.readlines()]
-            for line in lines:
-                for network in str_to_network(line):
-                    sub_ranges.add(network)
-
         stray_networks = list(self.summarize_online_hosts(hosts=stray_hosts, netmask=netmask).items())
+        stray_networks.sort(key=lambda x: x[1], reverse=True)
 
         return stray_networks
 
@@ -238,9 +232,9 @@ class Zmap:
 
         subnets = dict()
 
-        for ip in self.hosts:
+        for ip in hosts:
 
-            subnet = ipaddress.ip_network(ip + '/{}'.format(netmask), strict=False)
+            subnet = ipaddress.ip_network(str(ip) + '/{}'.format(netmask), strict=False)
 
             try:
                 subnets[subnet] += 1
@@ -483,7 +477,8 @@ def main(options):
                 csv_file.writeheader()
                 for network in stray_networks:
                     csv_file.writerow({'Network': str(network)})
-                    print('\t{}'.format(str(network)))
+                    #print('\t{:<16}{}'.format(str(network[0]), network[1]))
+                    print('\t{:<19}{:<10}'.format(str(network[0]), ' ({:,})'.format(network[1])))
 
             stray_hosts = z.get_host_delta(options.diff)
             print('')
