@@ -4,8 +4,10 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
 
 ## Features:
 * Scans entire private IP space (by default)
-    * Bandwidth, by default, is capped at 500kbps
+    * Bandwidth, by default, is capped at 750kbps
 * Automatic reverse-DNS lookups
+* Ability to calculate delta between scan results and another list
+    * Great for finding stray hosts
 * Outputs to CSV
 * Checks for EternalBlue
 * Automatic caching of scan results
