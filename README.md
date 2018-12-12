@@ -4,7 +4,7 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
 
 ## Features:
 * Scans entire private IP space (by default)
-    * Bandwidth, by default, is capped at 750kbps
+    * Bandwidth, by default, is capped at 1Mbps
 * Automatic reverse-DNS lookups
 * Ability to calculate delta between scan results and another list
     * Great for finding stray hosts
@@ -34,7 +34,7 @@ optional arguments:
   -t STR [STR ...], --targets STR [STR ...]
                         target network(s) to scan
   -B STR, --bandwidth STR
-                        max egress bandwidth (default 750K)
+                        max egress bandwidth (default 1M)
   --blacklist FILE      a file containing hosts to exclude from scanning
   -w CSV_FILE, --csv-file CSV_FILE
                         output CSV file
@@ -57,7 +57,7 @@ optional arguments:
 [+] No state found at /home/user/.asset_inventory/192.168.1.0-24/.state, starting fresh
 
 [+] Running zmap:
-    > zmap --blacklist-file=/home/user/.asset_inventory/192.168.1.0-24/.zmap_blacklist_tmp --bandwidth=750K --probe-module=icmp_echoscan 192.168.1.0/24
+    > zmap --blacklist-file=/home/user/.asset_inventory/192.168.1.0-24/.zmap_blacklist_tmp --bandwidth=1M --probe-module=icmp_echoscan 192.168.1.0/24
 
 Dec 07 14:31:49.556 [INFO] zmap: output module: csv
 Dec 07 14:31:49.556 [INFO] csv: no output file selected, will use stdout
@@ -87,7 +87,7 @@ Dec 07 14:31:58.621 [INFO] zmap: completed
 [+] Scanning 18 hosts on port 445
 
 [+] Running zmap:
-    > zmap --whitelist-file=/home/user/.asset_inventory/192.168.1.0-24/zmap_online_hosts.txt --bandwidth=750K --target-port=445
+    > zmap --whitelist-file=/home/user/.asset_inventory/192.168.1.0-24/zmap_online_hosts.txt --bandwidth=1M --target-port=445
 
 Dec 07 14:31:59.260 [INFO] zmap: output module: csv
 Dec 07 14:31:59.260 [INFO] csv: no output file selected, will use stdout
