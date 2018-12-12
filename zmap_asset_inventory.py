@@ -77,7 +77,7 @@ class Zmap:
 
         print('\n[+] Scanning for EternalBlue')
 
-        for ip in Nmap(self.scan_online_hosts(port=445), work_dir=self.work_dir):
+        for ip in Nmap(self.scan_online_hosts(port=445)[0], work_dir=self.work_dir):
             self.eternal_blue_count += 1
             try:
                 self.hosts[ip]['Vulnerable to EternalBlue'] = 'Yes'
@@ -99,8 +99,8 @@ class Zmap:
         for subnet in summarized_hosts:
             print('\t{:<19}{:<10}'.format(str(subnet[0]), ' ({:,})'.format(subnet[1])))
 
+        print('')
         if self.eternal_blue_count > 0:
-            print('')
             print('[+] Vulnerable to EternalBlue: {:,}\n'.format(self.eternal_blue_count))
             for host in self.hosts.values():
                 if host['Vulnerable to EternalBlue'] == 'Yes':
@@ -115,6 +115,7 @@ class Zmap:
 
         port = int(port)
         zmap_out_file = self.work_dir / 'zmap_port_{}.txt'.format(port)
+        port_scan_report = []
 
         if not self.secondary_zmap_started and not port in self.ports_scanned:
 
@@ -135,6 +136,7 @@ class Zmap:
             print('\n[+] Running zmap:\n\t> {}\n'.format(' '.join(zmap_command)))
 
             try:
+
                 self.secondary_zmap_process = sp.Popen(zmap_command, stdout=sp.PIPE)
                 sleep(2)
 
@@ -148,9 +150,9 @@ class Zmap:
                         self.hosts[ip].open_ports.add(port)
                         open_port_count += 1
 
-                print('')
-                print('[+] Wrote port {} results to {}'.format(port, zmap_out_file))
-                print('[+] {:,} hosts with port {} open'.format(open_port_count, port))
+                port_scan_report.append('\n[+] Wrote port {} results to {}'.format(port, zmap_out_file))
+                port_scan_report.append('[+] {:,} hosts with port {} open ({:.2f}%)'.format(\
+                    open_port_count, port, (open_port_count / len(self.hosts) * 100)))
 
             except sp.CalledProcessError as e:
                 sys.stderr.write('[!] Error launching zmap: {}\n'.format(str(e)))
@@ -160,7 +162,7 @@ class Zmap:
                 self.secondary_zmap_started = False
                 self.secondary_zmap_process = None
 
-        return zmap_out_file
+        return (zmap_out_file, port_scan_report)
 
 
     def update_config(self, bandwidth, work_dir, blacklist=None):
@@ -309,7 +311,7 @@ class Nmap:
     def __init__(self, targets_file, work_dir):
 
         self.process            = None
-        self.output_file    = str(work_dir / 'nmap_output')
+        self.output_file        = str(work_dir / 'nmap_output')
         self.finished           = False
         self.targets_file       = str(targets_file)
 
@@ -465,8 +467,14 @@ def main(options):
     # scan additional ports, if requested
     # only alive hosts are scanned
     if options.ports is not None:
+        port_scan_report = []
         for port in options.ports:
-            z.scan_online_hosts(port)
+            report = z.scan_online_hosts(port)[1]
+            port_scan_report += report
+
+        print('')
+        for line in port_scan_report:
+            print(line)
 
     # print summary
     z.report(netmask=options.netmask)
