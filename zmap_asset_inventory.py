@@ -25,7 +25,7 @@ class Zmap:
         self.hosts                      = dict()
         self.eternal_blue_count         = 0
         self.scanned_eternal_blue       = False
-        self.ports_scanned              = set()
+        self.ports_scanned              = dict()
         self.host_discovery_finished    = False
 
 
@@ -77,7 +77,7 @@ class Zmap:
 
         print('\n[+] Scanning for EternalBlue')
 
-        for ip in Nmap(self.scan_online_hosts(port=445)[0], work_dir=self.work_dir):
+        for ip in Nmap(self.scan_online_hosts(port=445), work_dir=self.work_dir):
             self.eternal_blue_count += 1
             try:
                 self.hosts[ip]['Vulnerable to EternalBlue'] = 'Yes'
@@ -91,7 +91,7 @@ class Zmap:
     def report(self, netmask=24):
 
         print('\n\n[+] RESULTS:')
-        print('=' * 50)
+        print('=' * 50 + '\n')
         print('[+] Total Online Hosts: {:,}'.format(len(self.hosts)))
         print('[+] Summary of Subnets:')
         summarized_hosts = list(self.summarize_online_hosts(netmask=netmask).items())
@@ -100,6 +100,11 @@ class Zmap:
             print('\t{:<19}{:<10}'.format(str(subnet[0]), ' ({:,})'.format(subnet[1])))
 
         print('')
+        for report in self.ports_scanned.values():
+            for line in report:
+                print(line)
+
+        print('\n')
         if self.eternal_blue_count > 0:
             print('[+] Vulnerable to EternalBlue: {:,}\n'.format(self.eternal_blue_count))
             for host in self.hosts.values():
@@ -115,21 +120,20 @@ class Zmap:
 
         port = int(port)
         zmap_out_file = self.work_dir / 'zmap_port_{}.txt'.format(port)
-        port_scan_report = []
-
-        if not self.secondary_zmap_started and not port in self.ports_scanned:
-
-            self.ports_scanned.add(port)
+        
+        if not port in self.ports_scanned:
 
             print('[+] Scanning {:,} hosts on port {}'.format(len(self.hosts), port))
 
             self.secondary_zmap_started = True
+            port_scan_report = []
 
             # run the main scan if it hasn't already completed
             for host in self:
                 pass
 
-            zmap_command = ['zmap', '--whitelist-file={}'.format(self.online_hosts_file), \
+            zmap_command = ['zmap', '--blacklist-file={}'.format(self.blacklist), \
+                '--whitelist-file={}'.format(self.online_hosts_file), \
                 '--bandwidth={}'.format(self.bandwidth), \
                 '--target-port={}'.format(port)]
 
@@ -154,6 +158,9 @@ class Zmap:
                 port_scan_report.append('[+] {:,} hosts with port {} open ({:.2f}%)'.format(\
                     open_port_count, port, (open_port_count / len(self.hosts) * 100)))
 
+                if open_port_count > 0:
+                    self.ports_scanned[port] = port_scan_report
+
             except sp.CalledProcessError as e:
                 sys.stderr.write('[!] Error launching zmap: {}\n'.format(str(e)))
                 sys.exit(1)
@@ -162,7 +169,7 @@ class Zmap:
                 self.secondary_zmap_started = False
                 self.secondary_zmap_process = None
 
-        return (zmap_out_file, port_scan_report)
+        return zmap_out_file
 
 
     def update_config(self, bandwidth, work_dir, blacklist=None):
@@ -467,14 +474,8 @@ def main(options):
     # scan additional ports, if requested
     # only alive hosts are scanned
     if options.ports is not None:
-        port_scan_report = []
         for port in options.ports:
-            report = z.scan_online_hosts(port)[1]
-            port_scan_report += report
-
-        print('')
-        for line in port_scan_report:
-            print(line)
+            z.scan_online_hosts(port)
 
     # print summary
     z.report(netmask=options.netmask)
@@ -569,7 +570,7 @@ def parse_target_args(targets):
 
 if __name__ == '__main__':
 
-    default_bandwidth = '750K'
+    default_bandwidth = '1M'
     default_work_dir = Path.home() / '.asset_inventory'
     default_cidr_mask = 24
 
