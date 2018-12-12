@@ -154,9 +154,10 @@ class Zmap:
                         self.hosts[ip].open_ports.add(port)
                         open_port_count += 1
 
-                port_scan_report.append('\n[+] Wrote port {} results to {}'.format(port, zmap_out_file))
-                port_scan_report.append('[+] {:,} hosts with port {} open ({:.2f}%)'.format(\
+                
+                port_scan_report.append('\n[+] {:,} hosts with port {} open ({:.2f}%)'.format(\
                     open_port_count, port, (open_port_count / len(self.hosts) * 100)))
+                port_scan_report.append('[+]  {}'.format(zmap_out_file))
 
                 if open_port_count > 0:
                     self.ports_scanned[port] = port_scan_report
@@ -370,6 +371,8 @@ class Nmap:
                             if script.attrib['id'] == 'smb-vuln-ms17-010' and 'VULNERABLE' in script.attrib['output']:
                                 self.hosts[ip]['Vulnerable to EternalBlue'] = 'Yes'
                                 yield ip
+                            else:
+                                self.hosts[ip]['Vulnerable to EternalBlue'] = 'No'
 
             self.finished = True
 
@@ -390,7 +393,7 @@ class Host(dict):
         super().__init__()
         self['IP Address'] = ip
         self['Hostname'] = ''
-        self['Vulnerable to EternalBlue'] = 'No'
+        self['Vulnerable to EternalBlue'] = 'Unknown'
         self.open_ports = set()
 
         if resolve:
@@ -455,9 +458,22 @@ def main(options):
         print('[+] No state found at {}, starting fresh'.format(saved_state))
         z = Zmap(options.targets, options.bandwidth, work_dir=options.work_dir, blacklist=options.blacklist)
 
+
+    # check for EternalBlue
+    if options.check_eternal_blue:
+        z.check_eternal_blue()
+
+    # scan additional ports if requested
+    # only alive hosts are scanned
+    if options.ports is not None:
+        for port in options.ports:
+            z.scan_online_hosts(port)
+
+
     # write CSV file
     with open(options.csv_file, 'w', newline='') as f:
-        csvfile = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname', 'Vulnerable to EternalBlue'])
+        csvfile = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname', 'Vulnerable to EternalBlue'] + \
+            ['{}/TCP'.format(port) for port in z.ports_scanned])
         csvfile.writeheader()
 
         # make sure initial discovery scan has completed
@@ -465,22 +481,20 @@ def main(options):
             pass
 
         for host in z.hosts_sorted():
+            open_ports = dict()
+            for port in z.ports_scanned:
+                if port in host.open_ports:
+                    open_ports['{}/TCP'.format(port)] = 'Open'
+                else:
+                    open_ports['{}/TCP'.format(port)] = 'Closed'
+
+            host.update(open_ports)
             csvfile.writerow(host)
-
-    # check for EternalBlue
-    if options.check_eternal_blue:
-        z.check_eternal_blue()
-
-    # scan additional ports, if requested
-    # only alive hosts are scanned
-    if options.ports is not None:
-        for port in options.ports:
-            z.scan_online_hosts(port)
 
     # print summary
     z.report(netmask=options.netmask)
 
-    # calculate deltas if requested:
+    # calculate deltas if requested
     if options.diff:
         stray_hosts = []
         stray_networks = []
