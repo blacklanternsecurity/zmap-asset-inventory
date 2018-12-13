@@ -113,7 +113,7 @@ class Zmap:
     def report(self, netmask=24):
 
         print('\n\n[+] RESULTS:')
-        print('=' * 50 + '\n')
+        print('=' * 60 + '\n')
         print('[+] Total Online Hosts: {:,}'.format(len(self.hosts)))
         print('[+] Summary of Subnets:')
         summarized_hosts = list(self.summarize_online_hosts(netmask=netmask).items())
@@ -312,14 +312,20 @@ class Zmap:
                 target_dir = self.work_dir / target_id
                 target_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
                 target_file = target_dir / 'state.csv'
-                targets[target] = self._make_csv_writer(csv_file=target_file)
+                targets[target] = (None, target_file)
 
-            for host in self.hosts.values():
+
+            for host in self.hosts.items():
                 for target in targets:
-                    csv_writer = targets[target][0]
 
-                    if ipaddress.ip_address(host['IP Address']) in target:
-                        self._write_csv_line(csv_writer, host)
+                    if ipaddress.ip_address(host[0]) in target:
+                        if targets[target][0] is None:
+                            target_file = targets[target][1]
+                            targets[target] = self._make_csv_writer(csv_file=target_file)
+
+                        csv_writer = targets[target][0]
+
+                        self._write_csv_line(csv_writer, host[1])
         finally:
             try:
                 # close file handles
@@ -448,6 +454,12 @@ class Zmap:
 
 
     def _write_csv_line(self, csv_writer, host):
+
+        if not type(host) == Host:
+            try:
+                host = self.hosts[str(host['IP Address'])]
+            except TypeError:
+                host = self.hosts[str(host)]
 
         open_ports = dict()
         for port in self.ports_scanned:
@@ -703,7 +715,7 @@ def main(options):
         print('')
         print('[+] {:,} active network(s) not found in {}'.format(len(stray_networks), str(options.diff)))
         print('[+] Writing data to {}'.format(stray_networks_csv))
-        print('=' * 50)
+        print('=' * 60)
         with open(stray_networks_csv, 'w', newline='') as f:
             csv_file = csv.DictWriter(f, fieldnames=['Network', 'Host Count'])
             csv_file.writeheader()
@@ -717,7 +729,7 @@ def main(options):
         print('')
         print('[+] {:,} alive host(s) not found in {}'.format(len(stray_hosts), str(options.diff)))
         print('[+] Writing data to {}'.format(stray_hosts_csv))
-        print('=' * 50)
+        print('=' * 60)
         for host in stray_hosts:
             print('\t{}'.format(str(host)))
 
@@ -735,8 +747,9 @@ def main(options):
 
         # if more than 5 percent of hosts are strays, or you have more than one stray network
         if len(stray_hosts)/len(z.hosts) > .05 or len(stray_networks) > 1:
-            print(' "Your asset management is bad and you should feel bad"')
             print('')
+            print(' "Your asset management is bad and you should feel bad"')
+            print('\n')
 
     print('[+] CSV file written to {}'.format(options.csv_file))
 
