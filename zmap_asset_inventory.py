@@ -22,34 +22,36 @@ class Zmap:
     def __init__(self, targets, bandwidth, work_dir, blacklist=None):
 
         self.targets                    = targets
+        self.zmap_targets               = []
         self.hosts                      = dict()
         self.eternal_blue_count         = 0
-        self.scanned_eternal_blue       = False
         self.ports_scanned              = dict()
         self.host_discovery_finished    = False
 
-
-        self.online_hosts_file          = str(work_dir / 'zmap_online_hosts.txt')
+        self.online_hosts_file          = str(work_dir / '.zmap_online_hosts.txt')
 
         self.update_config(bandwidth, work_dir, blacklist)
+        self.load_scan_cache()
 
 
     def start(self):
 
-        #if not self.primary_zmap_started and not host_discovery_finished:
-        self.primary_zmap_started = True
+        if self.zmap_targets:
 
-        zmap_command = ['zmap', '--blacklist-file={}'.format(self.blacklist), \
-            '--bandwidth={}'.format(self.bandwidth), \
-            '--probe-module=icmp_echoscan'] + [str(t) for t in self.targets]
+            #if not self.primary_zmap_started and not host_discovery_finished:
+            self.primary_zmap_started = True
 
-        print('\n[+] Running zmap:\n\t> {}\n'.format(' '.join(zmap_command)))
+            zmap_command = ['zmap', '--blacklist-file={}'.format(self.blacklist), \
+                '--bandwidth={}'.format(self.bandwidth), \
+                '--probe-module=icmp_echoscan'] + [str(t) for t in self.zmap_targets]
 
-        try:
-            self.primary_zmap_process = sp.Popen(zmap_command, stdout=sp.PIPE)
-        except sp.CalledProcessError as e:
-            sys.stderr.write('[!] Error launching zmap: {}\n'.format(str(e)))
-            sys.exit(1)
+            print('\n[+] Running zmap:\n\t> {}\n'.format(' '.join(zmap_command)))
+
+            try:
+                self.primary_zmap_process = sp.Popen(zmap_command, stdout=sp.PIPE)
+            except sp.CalledProcessError as e:
+                sys.stderr.write('[!] Error launching zmap: {}\n'.format(str(e)))
+                sys.exit(1)
 
 
     def stop(self):
@@ -66,16 +68,29 @@ class Zmap:
             self.secondary_zmap_process = None
 
 
+    def ips_sorted(self, hosts=None):
+
+        ips_sorted = []
+
+        if hosts is None:
+            ips_sorted = list(self.hosts.keys())
+        else:
+            ips_sorted = [str(h) for h in hosts]
+
+        ips_sorted.sort(key=lambda x: ipaddress.ip_address(x))
+        return ips_sorted
+
+
     def hosts_sorted(self, hosts=None):
 
         hosts_sorted = []
 
         if hosts is None:
-            hosts_sorted = list(self.hosts.keys())
+            hosts_sorted = list(self.hosts.values())
         else:
-            hosts_sorted = [str(h) for h in hosts]
+            hosts_sorted = [Host(h) for h in hosts]
 
-        hosts_sorted.sort(key=lambda x: ipaddress.ip_address(x))
+        hosts_sorted.sort(key=lambda x: ipaddress.ip_address(x['IP Address']))
         return hosts_sorted
 
 
@@ -83,7 +98,7 @@ class Zmap:
 
         print('\n[+] Scanning for EternalBlue')
 
-        for ip, vulnerable in Nmap(self.scan_online_hosts(port=445), work_dir=self.work_dir):
+        for ip, vulnerable in Nmap(self.scan_online_hosts(port=445), work_dir=self.work_dir / 'nmap'):
             if vulnerable:
                 self.eternal_blue_count += 1
                 try:
@@ -93,8 +108,6 @@ class Zmap:
                     self.hosts[ip]['Vulnerable to EternalBlue'] = 'Yes'
             else:
                 self.hosts[ip]['Vulnerable to EternalBlue'] = 'No'
-
-        self.scanned_eternal_blue = True
 
 
     def report(self, netmask=24):
@@ -109,18 +122,18 @@ class Zmap:
             print('\t{:<19}{:<10}'.format(str(subnet[0]), ' ({:,})'.format(subnet[1])))
 
         print('')
-        for report in self.ports_scanned.values():
-            for line in report:
-                print(line)
+        for port in self.ports_scanned:
+            open_port_count = self.ports_scanned[port]
+            print('[+] {:,} hosts with port {} open ({:.2f}%)'.format(\
+                    open_port_count, port, (open_port_count / len(self.hosts) * 100)))
 
-        print('\n')
         if self.eternal_blue_count > 0:
+            print('\n')
             print('[+] Vulnerable to EternalBlue: {:,}\n'.format(self.eternal_blue_count))
             for host in self.hosts.values():
                 if host['Vulnerable to EternalBlue'] == 'Yes':
                     print('\t{}'.format(str(host)))
-        elif self.scanned_eternal_blue:
-            print('[+] No systems found vulnerable to EternalBlue')
+            print('')
 
         print('')
 
@@ -135,7 +148,6 @@ class Zmap:
             print('[+] Scanning {:,} hosts on port {}'.format(len(self.hosts), port))
 
             self.secondary_zmap_started = True
-            port_scan_report = []
 
             # run the main scan if it hasn't already completed
             for host in self:
@@ -163,13 +175,8 @@ class Zmap:
                         self.hosts[ip].open_ports.add(port)
                         open_port_count += 1
 
-                
-                port_scan_report.append('\n[+] {:,} hosts with port {} open ({:.2f}%)'.format(\
-                    open_port_count, port, (open_port_count / len(self.hosts) * 100)))
-                port_scan_report.append('[+]  {}'.format(zmap_out_file))
-
                 if open_port_count > 0:
-                    self.ports_scanned[port] = port_scan_report
+                    self.ports_scanned[port] = open_port_count
 
             except sp.CalledProcessError as e:
                 sys.stderr.write('[!] Error launching zmap: {}\n'.format(str(e)))
@@ -252,6 +259,7 @@ class Zmap:
         return stray_hosts
 
 
+
     def summarize_online_hosts(self, hosts=None, netmask=24):
 
         if hosts is None:
@@ -274,33 +282,182 @@ class Zmap:
 
     def write_csv(self, csv_file=None, hosts=None):
 
-        # default CSV output
-        if csv_file is None:
-            csv_file = self.work_dir / 'asset_inventory.csv'
+        try:
 
-        with open(csv_file, 'w', newline='') as f:
-            csvfile = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname', 'Vulnerable to EternalBlue'] + \
-                ['{}/TCP'.format(port) for port in self.ports_scanned])
-            csvfile.writeheader()
+            csv_writer, f = self._make_csv_writer(csv_file)
 
             # make sure initial discovery scan has completed
             for host in self:
                 pass
 
             for host in self.hosts_sorted(hosts):
-                try:
-                    host = self.hosts[str(host)]
-                except KeyError:
-                    continue
-                open_ports = dict()
-                for port in self.ports_scanned:
-                    if port in host.open_ports:
-                        open_ports['{}/TCP'.format(port)] = 'Open'
-                    else:
-                        open_ports['{}/TCP'.format(port)] = 'Closed'
+                self._write_csv_line(csv_writer, host)
 
-                host.update(open_ports)
-                csvfile.writerow(host)
+        finally:
+            try:
+                f.close()
+            except:
+                pass
+
+
+
+    def dump_scan_cache(self):
+
+        try:
+            # dictionary in the form { ip_network: (csv_writer, csv_file_handle) }
+            targets = dict()
+
+            for target in self.targets:
+                target_id = str(target).replace('/', '-')
+                target_dir = self.work_dir / target_id
+                target_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+                target_file = target_dir / 'state.csv'
+                targets[target] = self._make_csv_writer(csv_file=target_file)
+
+            for host in self.hosts.values():
+                for target in targets:
+                    csv_writer = targets[target][0]
+
+                    if ipaddress.ip_address(host['IP Address']) in target:
+                        self._write_csv_line(csv_writer, host)
+        finally:
+            try:
+                # close file handles
+                for target in targets:
+                    targets[target][1].close()
+            except:
+                pass
+
+
+
+    def load_scan_cache(self):
+
+        #targets = [str(t).replace('/', '-') for t in self.targets]
+        cached_targets = []
+
+        try:
+            for target_dir in next(os.walk(self.work_dir))[1]:
+
+                try:
+                    target_net = ipaddress.ip_network(target_dir.replace('-', '/'))
+                except ValueError:
+                    continue
+
+                target_dir = self.work_dir / target_dir
+
+                try:
+                    for cache_file in next(os.walk(target_dir))[2]:
+                        if cache_file.endswith('.csv'):
+                            print('[+] Found cached scan data for {}'.format(str(target_net)))
+                            cached_targets.append(target_net)
+                            self.read_csv(target_dir / cache_file)
+                except StopIteration:
+                    continue
+
+        except StopIteration:
+            return
+
+        for target in self.targets:
+            if not target in cached_targets:
+                self.zmap_targets.append(target)
+
+
+
+
+        '''
+        with open(str(Path(target_dir) / cache_file), newline='') as f:
+
+            if cache_file.startswith('zmap_ping'):
+                
+                csv_file = csv.DictReader(f, fieldnames=['IP Address', 'Hostname'])
+
+            elif cache_file.endswith('.csv'):
+
+                csv_file = csv.DictReader(f, fieldnames=['IP Address', 'Hostname'])
+                # remove header
+                next(csv_file)
+                hosts = list(csv_file)
+
+                if cache_file.startswith('tcp_port_'):
+                    for host in hosts:
+
+                        try:
+                            ip, hostname = (host['IP Address'], host['Hostname'])
+                            port = int(cache_file.split('.')[0].split('tcp_port_')[1])
+                        except ValueError:
+                            continue
+
+                        try:
+                            self.hosts[ip].open_ports.add(port)
+                        except KeyError:
+                            self.hosts[ip] = Host(ip=ip, hostname=hostname)
+                            self.hosts[ip].open_ports.add(port)
+        '''
+
+
+
+    def read_csv(self, csv_file):
+
+        # default CSV output
+        if csv_file is None:
+            csv_file = self.work_dir / 'state.csv'
+
+        with open(str(csv_file), newline='') as f:
+            c = csv.DictReader(f)
+
+            for line in c:
+
+                ip = line['IP Address']
+
+                host = Host(ip=ip, hostname=line['Hostname'])
+                vulnerable_to_eb = line['Vulnerable to EternalBlue']
+                if vulnerable_to_eb == 'Yes':
+                    self.eternal_blue_count += 1
+                host['Vulnerable to EternalBlue'] = vulnerable_to_eb
+                self.hosts[ip] = host
+
+                for field in c.fieldnames:
+                    if field.endswith('/TCP'):
+                        port = int(field.split('/')[0])
+                        if line[field] == 'Open':
+                            try:
+                                self.ports_scanned[port] += 1
+                            except KeyError:
+                                self.ports_scanned[port] = 1
+
+
+
+
+    def _make_csv_writer(self, csv_file=None):
+        '''
+        take csv filename
+        returns (csv_dictwriter, file_handle)
+        '''
+
+        # default CSV output
+        if csv_file is None:
+            csv_file = self.work_dir / 'asset_inventory.csv'
+
+        f = open(csv_file, 'w', newline='')
+        csv_writer = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname', 'Vulnerable to EternalBlue'] + \
+            ['{}/TCP'.format(port) for port in self.ports_scanned])
+        csv_writer.writeheader()
+
+        return (csv_writer, f)
+
+
+
+    def _write_csv_line(self, csv_writer, host):
+
+        open_ports = dict()
+        for port in self.ports_scanned:
+            if port in host.open_ports:
+                open_ports['{}/TCP'.format(port)] = 'Open'
+            else:
+                open_ports['{}/TCP'.format(port)] = 'Closed'
+
+        host.update(open_ports)
+        csv_writer.writerow(host)
 
 
 
@@ -328,16 +485,16 @@ class Zmap:
 
     def __iter__(self):
 
-        if self.host_discovery_finished:
+        with open(self.online_hosts_file, 'w') as f:
 
             for host in self.hosts.values():
+                f.write(host['IP Address'] + '\n')
                 yield host
 
-        else:
 
-            self.primary_zmap_started = True
+            if self.zmap_targets:
 
-            with open(self.online_hosts_file, 'w') as f:
+                self.primary_zmap_started = True
 
                 self.start()
                 sleep(1)
@@ -349,8 +506,8 @@ class Zmap:
                     f.write(host['IP Address'] + '\n')
                     yield host
 
-            self.primary_zmap_started = False
-            self.host_discovery_finished = True
+        self.primary_zmap_started = False
+        self.host_discovery_finished = True
 
 
 
@@ -360,7 +517,7 @@ class Nmap:
     def __init__(self, targets_file, work_dir):
 
         self.process            = None
-        self.output_file        = str(work_dir / 'nmap_output')
+        self.output_file        = str(work_dir / 'nmap_ms17-010')
         self.finished           = False
         self.targets_file       = str(targets_file)
 
@@ -432,11 +589,17 @@ class Nmap:
 
 class Host(dict):
 
-    def __init__(self, ip, resolve=False):
+    def __init__(self, ip, hostname=None, resolve=False):
 
         super().__init__()
+
         self['IP Address'] = ip
-        self['Hostname'] = ''
+
+        if not hostname:
+            self['Hostname'] = ''
+        else:
+            self['Hostname'] = str(hostname)
+
         self['Vulnerable to EternalBlue'] = 'N/A'
         self.open_ports = set()
 
@@ -455,6 +618,7 @@ class Host(dict):
         return self['Hostname']
 
 
+
     def __str__(self):
 
         return '{:<16}{}'.format(self['IP Address'], self['Hostname'])
@@ -467,25 +631,32 @@ def main(options):
         sys.stderr.write('[!] Must be root\n')
         sys.exit(2)
 
-
-
     # resolve symlinks
     options.work_dir = options.work_dir.resolve()
 
+    cache_dir = options.work_dir / 'cache'
+    nmap_dir = cache_dir / 'nmap'
+
     # if starting fresh rename working directory to ".bak"
     if options.start_fresh:
-        backup_work_dir = Path(str(options.work_dir) + '_{date:%Y-%m-%d_%H:%M:%S}.bak'.format( date=datetime.now() ))
+        backup_cache_dir = Path(str(cache_dir) + '_{date:%Y-%m-%d_%H:%M:%S}.bak'.format( date=datetime.now() ))
         try:
-            old_dir = str(options.work_dir)
-            options.work_dir.rename(backup_work_dir)
-            print('[+] Backed up {} to {}'.format(old_dir, str(backup_work_dir)))
+            old_dir = str(cache_dir)
+            cache_dir.rename(backup_cache_dir)
+            print('[+] Backed up {} to {}'.format(old_dir, str(backup_cache_dir)))
         except FileNotFoundError:
             pass
 
-    # create working directory if it doesn't exist
-    options.work_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+    # create directories if they don't exist
+    nmap_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+
+    if options.csv_file is None:
+        options.csv_file = options.work_dir / 'asset_inventory.csv'
+
 
     # try to load "Zmap" object from pickled state
+    '''
     saved_state = str(options.work_dir / '.state')
     try:
 
@@ -496,8 +667,13 @@ def main(options):
 
     except (FileNotFoundError, EOFError):
         print('[+] No state found at {}, starting fresh'.format(saved_state))
-        z = Zmap(options.targets, options.bandwidth, work_dir=options.work_dir, blacklist=options.blacklist)
+        z = Zmap(options.targets, options.bandwidth, work_dir=options.work_dir / 'cache', blacklist=options.blacklist)
+    '''
 
+    z = Zmap(options.targets, options.bandwidth, work_dir=cache_dir, blacklist=options.blacklist)
+
+    # load cached scan data
+    # z.load_scan_cache()
 
     # check for EternalBlue
     if options.check_eternal_blue:
@@ -509,12 +685,13 @@ def main(options):
         for port in options.ports:
             z.scan_online_hosts(port)
 
-
     # write CSV file
     z.write_csv(csv_file=options.csv_file)
 
     # print summary
     z.report(netmask=options.netmask)
+    if options.check_eternal_blue and z.eternal_blue_count <= 0:
+        print('[+] No systems found vulnerable to EternalBlue')
 
     # calculate deltas if requested
     if options.diff:
@@ -556,7 +733,6 @@ def main(options):
                 print('\t{}'.format(str(host)))
         '''
 
-        print('\n')
         # if more than 5 percent of hosts are strays, or you have more than one stray network
         if len(stray_hosts)/len(z.hosts) > .05 or len(stray_networks) > 1:
             print(' "Your asset management is bad and you should feel bad"')
@@ -564,14 +740,13 @@ def main(options):
 
     print('[+] CSV file written to {}'.format(options.csv_file))
 
-    try:
-        z.stop()
-        # pickle Zmap object to save state
-        with open(saved_state, 'wb') as f:
-            print('[+] Saving state to {}'.format(str(saved_state)))
-            pickle.dump(z, f)
-    except:
-        pass
+    z.stop()
+    z.dump_scan_cache()
+    # pickle Zmap object to save state
+    # with open(saved_state, 'wb') as f:
+    #     print('[+] Saving state to {}'.format(str(saved_state)))
+    #     pickle.dump(z, f)
+
 
 
 
@@ -624,9 +799,9 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--start-fresh',          action='store_true',    help='don\'t load results from previous scans')
     parser.add_argument('-p', '--ports', nargs='+', type=int,                   help='port-scan online hosts')
     parser.add_argument('-e', '--check-eternal-blue',   action='store_true',    help='scan for EternalBlue')
-    parser.add_argument('--work-dir',               type=Path,                  help='custom working directory', metavar='DIR')
+    parser.add_argument('--work-dir', type=Path, default=default_work_dir,      help='custom working directory', metavar='DIR')
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
-    parser.add_argument('-n', '--netmask', type=int, default=default_cidr_mask, help='summarize networks with this CIDR mask (default: {})'.format(default_cidr_mask))
+    parser.add_argument('-n', '--netmask', type=int, default=default_cidr_mask, help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
 
     try:
 
@@ -638,18 +813,18 @@ if __name__ == '__main__':
 
         assert 0 <= options.netmask <=32, "Invalid netmask"
 
-        scan_uid = '_'.join([str(t).replace('/', '-') for t in options.targets])
-        if options.work_dir is None:
-            # unique identifier based on scan targets
-            options.work_dir = default_work_dir / scan_uid
-        else:
-            options.work_dir = options.work_dir / scan_uid
+        
+        #scan_uid = '_'.join([str(t).replace('/', '-') for t in options.targets])
+        #if options.work_dir is None:
+        #    # unique identifier based on scan targets
+        #    options.work_dir = default_work_dir
+
 
 
         main(options)
 
 
-    except (argparse.ArgumentError, ValueError, AssertionError) as e:
+    except (argparse.ArgumentError, AssertionError) as e:
         sys.stderr.write('\n[!] {}\n'.format(str(e)))
         sys.exit(2)
 
