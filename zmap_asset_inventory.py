@@ -184,6 +184,15 @@ class Zmap:
         zmap_whitelist_file = self.work_dir / '.zmap_tmp_whitelist_port_{}.txt'.format(port)
         targets = [t[0] for t in self.targets.items() if port not in t[1]]
 
+        # fill target-specific port counts
+        # so we at least know they're scanned
+        # necessary because currently all targets are wrapped together
+        for target in targets:
+            try:
+                self.targets[target][port]
+            except KeyError:
+                self.targets[target][port] = 0
+
         # write target IPs to file for zmap
         hosts_written = False
         with open(str(zmap_whitelist_file), 'w') as f:
@@ -365,6 +374,7 @@ class Zmap:
 
             with open(self.online_hosts_file, 'w') as f:
                 for host in self.hosts_sorted(hosts):
+
                     self._write_csv_line(csv_writer, host)
                     f.write(host['IP Address'] + '\n')
 
@@ -540,16 +550,35 @@ class Zmap:
             except ValueError:
                 return
 
+        # see which target range the host is from
+        # so we know whether the port is closed or unscanned
+        ip = ipaddress.ip_address(host['IP Address'])
+        in_target = None
+        for target in self.targets:
+            if ip in target:
+                #print(str(ip), ' is in ', str(target))
+                in_target = target
+                break
 
         open_ports = dict()
         for port in ports:
+            port_state = 'Unknown'
             if port in host.open_ports:
-                open_ports['{}/TCP'.format(port)] = 'Open'
-            else:
-                open_ports['{}/TCP'.format(port)] = 'Closed'
+                port_state = 'Open'
+            elif in_target is not None:
+                if port in self.targets[in_target]:
+                    #print(str(port), ' is in ', str(self.targets))
+                    port_state = 'Closed'
+
+            open_ports['{}/TCP'.format(port)] = port_state
 
         host.update(open_ports)
-        csv_writer.writerow(host)
+        try:
+            csv_writer.writerow(host)
+        except ValueError as e:
+            # once upon a time there was an error here about missing fieldnames
+            # god only knows how to reproduce it
+            print('[!] {}'.format(str(e)))
 
 
 
@@ -577,13 +606,13 @@ class Zmap:
 
     def __iter__(self):
 
-        with open(self.zmap_ping_file, 'w') as f:
+        for host in self.hosts.values():
+            #f.write(host['IP Address'] + '\n')
+            yield host
 
-            for host in self.hosts.values():
-                f.write(host['IP Address'] + '\n')
-                yield host
+        if self.zmap_ping_targets and not self.primary_zmap_started:
 
-            if self.zmap_ping_targets and not self.primary_zmap_started:
+            with open(self.zmap_ping_file, 'w') as f:
 
                 self.start()
                 sleep(1)
