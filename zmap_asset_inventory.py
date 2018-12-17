@@ -21,7 +21,7 @@ import xml.etree.cElementTree as xml # for parsing Nmap output
 
 class Zmap:
 
-    def __init__(self, targets, bandwidth, work_dir, blacklist=None):
+    def __init__(self, targets, bandwidth, work_dir, blacklist=None, interface=None, gateway_mac=None):
 
         # target-specific open port counters
         # nested dictionary in format:
@@ -39,6 +39,17 @@ class Zmap:
         # dictionary in format:
         # { ip_address(): Host() ... }
         self.hosts                      = dict()
+
+        if interface is None:
+            self.interface_arg         = []
+        else:
+            self.interface_arg         = ['--interface={}'.format(str(interface))]
+
+        if gateway_mac is None:
+            self.gateway_mac_arg       = []
+        else:
+            self.gateway_mac_arg       = ['--gateway-mac={}'.format(str(gateway_mac))]
+
         self.zmap_ping_targets          = set()
         self.eternal_blue_count         = 0
         self.host_discovery_finished    = False
@@ -58,7 +69,8 @@ class Zmap:
 
             zmap_command = ['zmap', '--blacklist-file={}'.format(self.blacklist), \
                 '--bandwidth={}'.format(self.bandwidth), \
-                '--probe-module=icmp_echoscan'] + [str(t) for t in self.zmap_ping_targets]
+                '--probe-module=icmp_echoscan'] + self.interface_arg + \
+                self.gateway_mac_arg + [str(t) for t in self.zmap_ping_targets]
 
             print('\n[+] Running zmap:\n\t> {}\n'.format(' '.join(zmap_command)))
 
@@ -199,7 +211,8 @@ class Zmap:
             zmap_command = ['zmap', '--blacklist-file={}'.format(self.blacklist), \
                 '--whitelist-file={}'.format(str(zmap_whitelist_file)), \
                 '--bandwidth={}'.format(self.bandwidth), \
-                '--target-port={}'.format(port)]
+                '--target-port={}'.format(port)] + \
+                self.gateway_mac_arg + self.interface_arg
 
             print('\n[+] Running zmap:\n\t> {}\n'.format(' '.join(zmap_command)))
 
@@ -726,7 +739,8 @@ def main(options):
     if options.csv_file is None:
         options.csv_file = options.work_dir / 'asset_inventory.csv'
 
-    z = Zmap(options.targets, options.bandwidth, work_dir=cache_dir, blacklist=options.blacklist)
+    z = Zmap(options.targets, options.bandwidth, work_dir=cache_dir, blacklist=options.blacklist, \
+        interface=options.interface, gateway_mac=options.gateway_mac)
 
     # check for EternalBlue
     if options.check_eternal_blue:
@@ -848,6 +862,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser("Scan private IP ranges, output to CSV")
     parser.add_argument('-t', '--targets', type=str_to_network, nargs='+', default=[['10.0.0.0/8'], ['172.16.0.0/12'], ['192.168.0.0/16']], help='target network(s) to scan', metavar='STR')
     parser.add_argument('-B', '--bandwidth', default=default_bandwidth,         help='max egress bandwidth (default {})'.format(default_bandwidth), metavar='STR')
+    parser.add_argument('-i', '--interface',                                    help='interface from which to scan (e.g. eth0)', metavar='IFC')
+    parser.add_argument('-G', '--gateway-mac',                                  help='MAC address of default gateway', metavar='MAC')
     parser.add_argument('--blacklist',                                          help='a file containing hosts to exclude from scanning', metavar='FILE')
     parser.add_argument('-w', '--csv-file',                                     help='output CSV file', metavar='CSV_FILE')
     parser.add_argument('-f', '--start-fresh',          action='store_true',    help='don\'t load results from previous scans')
