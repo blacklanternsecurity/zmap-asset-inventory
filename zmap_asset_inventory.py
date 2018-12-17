@@ -7,7 +7,6 @@ import os
 import csv
 import sys
 import socket
-import pickle
 import argparse
 import tempfile
 import ipaddress
@@ -41,19 +40,20 @@ class Zmap:
         self.hosts                      = dict()
 
         if interface is None:
-            self.interface_arg         = []
+            self.interface_arg          = []
         else:
-            self.interface_arg         = ['--interface={}'.format(str(interface))]
+            self.interface_arg          = ['--interface={}'.format(str(interface))]
 
         if gateway_mac is None:
-            self.gateway_mac_arg       = []
+            self.gateway_mac_arg        = []
         else:
-            self.gateway_mac_arg       = ['--gateway-mac={}'.format(str(gateway_mac))]
+            self.gateway_mac_arg        = ['--gateway-mac={}'.format(str(gateway_mac))]
 
         self.zmap_ping_targets          = set()
         self.eternal_blue_count         = 0
         self.host_discovery_finished    = False
 
+        self.zmap_ping_file             = str(work_dir / 'zmap_ping_{date:%Y-%m-%d_%H:%M:%S}.txt'.format(date=datetime.now()))
         self.online_hosts_file          = str(work_dir / 'zmap_all_online_hosts.txt')
 
         self.update_config(bandwidth, work_dir, blacklist)
@@ -62,9 +62,8 @@ class Zmap:
 
     def start(self):
 
-        if self.zmap_ping_targets:
+        if self.zmap_ping_targets and not self.primary_zmap_started:
 
-            #if not self.primary_zmap_started and not host_discovery_finished:
             self.primary_zmap_started = True
 
             zmap_command = ['zmap', '--blacklist-file={}'.format(self.blacklist), \
@@ -78,9 +77,8 @@ class Zmap:
                 self.primary_zmap_process = sp.Popen(zmap_command, stdout=sp.PIPE)
             except sp.CalledProcessError as e:
                 sys.stderr.write('[!] Error launching zmap: {}\n'.format(str(e)))
+                sys.stderr.flush()
                 sys.exit(1)
-
-            self.zmap_ping_targets.clear()
 
 
     def stop(self):
@@ -177,6 +175,10 @@ class Zmap:
 
     def scan_online_hosts(self, port):
 
+        # make sure main scan has finished
+        for h in self:
+            pass
+
         port = int(port)
         zmap_out_file = self.work_dir / 'zmap_port_{}.txt'.format(port)
         zmap_whitelist_file = self.work_dir / '.zmap_tmp_whitelist_port_{}.txt'.format(port)
@@ -241,7 +243,10 @@ class Zmap:
                     return
 
                 if open_port_count > 0:
-                    self.open_ports[port] = open_port_count
+                    try:
+                        self.open_ports[port] += open_port_count
+                    except KeyError:
+                        self.open_ports[port] = open_port_count
 
             except sp.CalledProcessError as e:
                 sys.stderr.write('[!] Error launching zmap: {}\n'.format(str(e)))
@@ -358,8 +363,10 @@ class Zmap:
             for host in self:
                 pass
 
-            for host in self.hosts_sorted(hosts):
-                self._write_csv_line(csv_writer, host)
+            with open(self.online_hosts_file, 'w') as f:
+                for host in self.hosts_sorted(hosts):
+                    self._write_csv_line(csv_writer, host)
+                    f.write(host['IP Address'] + '\n')
 
         finally:
             try:
@@ -570,15 +577,13 @@ class Zmap:
 
     def __iter__(self):
 
-        with open(self.online_hosts_file, 'w') as f:
+        with open(self.zmap_ping_file, 'w') as f:
 
             for host in self.hosts.values():
                 f.write(host['IP Address'] + '\n')
                 yield host
 
-            if self.zmap_ping_targets:
-
-                self.primary_zmap_started = True
+            if self.zmap_ping_targets and not self.primary_zmap_started:
 
                 self.start()
                 sleep(1)
@@ -588,10 +593,12 @@ class Zmap:
                     except ValueError:
                         continue
                     host = Host(ip, resolve=True)
-                    print('[+] {:<17}{:<10} '.format(str(ip), host['Hostname']))
+                    print('[+] {:<17}{:<10} '.format(host['IP Address'], host['Hostname']))
                     self.hosts[ip] = host
                     f.write(str(ip) + '\n')
                     yield host
+
+                self.zmap_ping_targets.clear()
 
         self.primary_zmap_started = False
         self.host_discovery_finished = True
@@ -741,6 +748,9 @@ def main(options):
 
     z = Zmap(options.targets, options.bandwidth, work_dir=cache_dir, blacklist=options.blacklist, \
         interface=options.interface, gateway_mac=options.gateway_mac)
+    # let ping scan finish
+    for host in z:
+        pass
 
     # check for EternalBlue
     if options.check_eternal_blue:
@@ -805,10 +815,11 @@ def main(options):
         z.write_csv(csv_file=stray_hosts_csv, hosts=stray_hosts)
 
         # if more than 5 percent of hosts are strays, or you have more than one stray network
-        if len(stray_hosts)/len(z.hosts) > .05 or len(stray_networks) > 1:
-            print('')
-            print(' "Your asset management is bad and you should feel bad"')
-            print('\n')
+        if len(z.hosts) > 0:
+            if len(stray_hosts)/len(z.hosts) > .05 or len(stray_networks) > 1:
+                print('')
+                print(' "Your asset management is bad and you should feel bad"')
+                print('\n')
 
     print('[+] CSV file written to {}'.format(options.csv_file))
 
@@ -826,14 +837,22 @@ def str_to_network(s):
 
     try:
         if '-' in s:
-            start, end = s.split('-')[:2]
-            for i in ipaddress.summarize_address_range(ipaddress.ip_address(start), ipaddress.ip_address(end)):
-                yield i
+            if s.count('-') == 1:
+                start, end = [p.strip() for p in s.split('-')[:2]]
+                for i in ipaddress.summarize_address_range(ipaddress.ip_address(start), ipaddress.ip_address(end)):
+                    yield i
+            else:
+                raise ValueError()
         else:
             yield ipaddress.ip_network(s, strict=False)
 
     except ValueError:
-        raise ValueError('Cannot create host/network from "{}"'.format(str(s)))
+        print('[!] Cannot create host/network from "{}"'.format(str(s)))
+        print('     Accepted formats are:')
+        print('      192.168.0.0/24')
+        print('      192.168.0.0-192.168.0.255')
+
+        #raise ValueError('Cannot create host/network from "{}"'.format(str(s)))
 
 
 def parse_target_args(targets):
@@ -881,7 +900,7 @@ if __name__ == '__main__':
             sys.stderr.write('\n[!] No valid targets\n')
             sys.exit(1)
 
-        assert 0 <= options.netmask <=32, "Invalid netmask"
+        assert 0 <= options.netmask <= 32, "Invalid netmask"
 
         main(options)
 
