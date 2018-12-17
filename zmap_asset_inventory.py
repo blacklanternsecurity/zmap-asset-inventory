@@ -23,16 +23,19 @@ class Zmap:
 
     def __init__(self, targets, bandwidth, work_dir, blacklist=None):
 
+        # target-specific open port counters
         # nested dictionary in format:
         # { target: { port: open_count ... } ... }
         self.targets = dict()
         for target in targets:
             self.targets[target]        = dict()
 
+        # global open port counters
         # dictionary in format:
         # { port: open_count ... }
         self.open_ports                 = dict()
 
+        # stores all known hosts
         # dictionary in format:
         # { ip_address(): Host() ... }
         self.hosts                      = dict()
@@ -390,7 +393,6 @@ class Zmap:
 
     def load_scan_cache(self):
 
-        #targets = [str(t).replace('/', '-') for t in self.targets]
         cached_targets = []
 
         try:
@@ -436,38 +438,6 @@ class Zmap:
             if not target in cached_targets:
                 self.zmap_ping_targets.add(target)
 
-
-
-
-        '''
-        with open(str(Path(target_dir) / cache_file), newline='') as f:
-
-            if cache_file.startswith('zmap_ping'):
-                
-                csv_file = csv.DictReader(f, fieldnames=['IP Address', 'Hostname'])
-
-            elif cache_file.endswith('.csv'):
-
-                csv_file = csv.DictReader(f, fieldnames=['IP Address', 'Hostname'])
-                # remove header
-                next(csv_file)
-                hosts = list(csv_file)
-
-                if cache_file.startswith('tcp_port_'):
-                    for host in hosts:
-
-                        try:
-                            ip, hostname = (host['IP Address'], host['Hostname'])
-                            port = int(cache_file.split('.')[0].split('tcp_port_')[1])
-                        except ValueError:
-                            continue
-
-                        try:
-                            self.hosts[ip].open_ports.add(port)
-                        except KeyError:
-                            self.hosts[ip] = Host(ip=ip, hostname=hostname)
-                            self.hosts[ip].open_ports.add(port)
-        '''
 
 
 
@@ -545,9 +515,6 @@ class Zmap:
             ports = self.open_ports
 
         if not type(host) == Host:
-            # try:
-            #     host = self.hosts[ipaddress.ip_address(host['IP Address'])]
-            # except TypeError:
             try:
                 host = self.hosts[ipaddress.ip_address(host)]
             except ValueError:
@@ -653,8 +620,6 @@ class Nmap:
             print('\n[+] Finished Nmap scan')
 
             # parse xml
-            # print('[+] Parsing Nmap results')
-
             tree = xml.parse(self.output_file + '.xml')
 
             for host in tree.findall('host'):
@@ -725,10 +690,10 @@ class Host(dict):
         return self['Hostname']
 
 
-
     def __str__(self):
 
         return '{:<16}{}'.format(self['IP Address'], self['Hostname'])
+
 
 
 
@@ -761,26 +726,7 @@ def main(options):
     if options.csv_file is None:
         options.csv_file = options.work_dir / 'asset_inventory.csv'
 
-
-    # try to load "Zmap" object from pickled state
-    '''
-    saved_state = str(options.work_dir / '.state')
-    try:
-
-        with open(saved_state, 'rb') as f:
-            z = pickle.load(f)
-            print('[+] Loaded saved state from {}'.format(saved_state))
-            z.update_config(options.bandwidth, work_dir=options.work_dir, blacklist=options.blacklist)
-
-    except (FileNotFoundError, EOFError):
-        print('[+] No state found at {}, starting fresh'.format(saved_state))
-        z = Zmap(options.targets, options.bandwidth, work_dir=options.work_dir / 'cache', blacklist=options.blacklist)
-    '''
-
     z = Zmap(options.targets, options.bandwidth, work_dir=cache_dir, blacklist=options.blacklist)
-
-    # load cached scan data
-    # z.load_scan_cache()
 
     # check for EternalBlue
     if options.check_eternal_blue:
@@ -844,16 +790,6 @@ def main(options):
 
         z.write_csv(csv_file=stray_hosts_csv, hosts=stray_hosts)
 
-        '''
-        with open(stray_hosts_csv, 'w', newline='') as f:
-            csv_file = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname'])
-            csv_file.writeheader()
-            for host in stray_hosts:
-                host = z.hosts[str(host)]
-                csv_file.writerow({'IP Address': host['IP Address'], 'Hostname': host['Hostname']})
-                print('\t{}'.format(str(host)))
-        '''
-
         # if more than 5 percent of hosts are strays, or you have more than one stray network
         if len(stray_hosts)/len(z.hosts) > .05 or len(stray_networks) > 1:
             print('')
@@ -864,10 +800,6 @@ def main(options):
 
     z.stop()
     z.dump_scan_cache()
-    # pickle Zmap object to save state
-    # with open(saved_state, 'wb') as f:
-    #     print('[+] Saving state to {}'.format(str(saved_state)))
-    #     pickle.dump(z, f)
 
 
 
@@ -934,14 +866,6 @@ if __name__ == '__main__':
             sys.exit(1)
 
         assert 0 <= options.netmask <=32, "Invalid netmask"
-
-        
-        #scan_uid = '_'.join([str(t).replace('/', '-') for t in options.targets])
-        #if options.work_dir is None:
-        #    # unique identifier based on scan targets
-        #    options.work_dir = default_work_dir
-
-
 
         main(options)
 
