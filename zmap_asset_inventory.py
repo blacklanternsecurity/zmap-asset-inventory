@@ -789,7 +789,8 @@ def main(options):
     # only alive hosts are scanned
     if options.ports is not None:
         for port in options.ports:
-            z.scan_online_hosts(port)
+            zmap_out_file = z.scan_online_hosts(port)
+            print('\n[+] Port scan results for 445/TCP written to {}'.format(str(zmap_out_file)))
 
     # write CSV file
     z.write_csv(csv_file=options.csv_file)
