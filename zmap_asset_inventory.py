@@ -71,7 +71,7 @@ class Zmap:
                 '--probe-module=icmp_echoscan'] + self.interface_arg + \
                 self.gateway_mac_arg + [str(t) for t in self.zmap_ping_targets]
 
-            print('\n[+] Running zmap:\n\t> {}\n'.format(' '.join(zmap_command)))
+            print('\n[+] Running zmap ping scan:\n\t> {}\n'.format(' '.join(zmap_command)))
 
             try:
                 self.primary_zmap_process = sp.Popen(zmap_command, stdout=sp.PIPE)
@@ -180,7 +180,7 @@ class Zmap:
             pass
 
         port = int(port)
-        zmap_out_file = self.work_dir / 'zmap_port_{}.txt'.format(port)
+        zmap_out_file = self.work_dir / 'zmap_port_{}_{date:%Y-%m-%d_%H-%M-%S}.txt'.format(port, date=datetime.now())
         zmap_whitelist_file = self.work_dir / '.zmap_tmp_whitelist_port_{}.txt'.format(port)
         targets = [t[0] for t in self.targets.items() if port not in t[1]]
 
@@ -225,7 +225,7 @@ class Zmap:
                 '--target-port={}'.format(port)] + \
                 self.gateway_mac_arg + self.interface_arg
 
-            print('\n[+] Running zmap:\n\t> {}\n'.format(' '.join(zmap_command)))
+            print('\n[+] Running zmap SYN scan:\n\t> {}\n'.format(' '.join(zmap_command)))
 
             try:
 
@@ -739,6 +739,8 @@ class Host(dict):
         return self['Hostname']
 
 
+
+
     def __str__(self):
 
         return '{:<16}{}'.format(self['IP Address'], self['Hostname'])
@@ -760,7 +762,7 @@ def main(options):
 
     # if starting fresh rename working directory to ".bak"
     if options.start_fresh:
-        backup_cache_dir = Path(str(cache_dir) + '_{date:%Y-%m-%d_%H:%M:%S}.bak'.format( date=datetime.now() ))
+        backup_cache_dir = Path(str(cache_dir) + '_{date:%Y-%m-%d_%H-%M-%S}.bak'.format( date=datetime.now() ))
         try:
             old_dir = str(cache_dir)
             cache_dir.rename(backup_cache_dir)
