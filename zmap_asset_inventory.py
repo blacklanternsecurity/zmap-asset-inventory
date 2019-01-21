@@ -5,6 +5,7 @@
 import os
 import csv
 import sys
+import queue
 import argparse
 import ipaddress
 import subprocess as sp
@@ -13,6 +14,7 @@ import concurrent.futures
 from datetime import datetime
 from lib.service_enum import *
 from lib.scan import Nmap, Zmap
+
 
 
 def main(options):
@@ -41,8 +43,11 @@ def main(options):
     nmap_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
     # add port 445 if check_services is requested
-    if options.check_services and not 445 in options.ports:
-        options.ports.append(445)
+    if options.check_services:
+        if not options.ports:
+            options.ports = [445]
+        elif not 445 in options.ports:
+            options.ports.append(445)
 
 
     if options.csv_file is None:
@@ -72,28 +77,57 @@ def main(options):
     # if service enumeration is enabled
     # run wmiexec
     if options.check_services:
-        print('[+] Requested service information will be retrieved for each host')
+        print('[+] Retrieving service information for Windows hosts')
+
+        lockout_queue = queue.Queue()
+        lockout_counter = 0
+
         # parse services.config
-        config = parse_service_config('services.config')
-        if config is None:
-            print('[!] Error with config')
-        else:
-            z.services = ['OS'] + list(config['SERVICES'].keys())
-            if z.services:
-                # set up threading
-                wmi_futures = []
-                with concurrent.futures.ThreadPoolExecutor(max_workers=20) as wmi_executor:
-                    for host in z:
-                        if 445 in host.open_ports:
-                            wmi_futures.append(wmi_executor.submit(host.get_services, config))
-                            #host.get_services(config)
-
-                    wmi_executor.shutdown(wait=True)
-
-                for f in wmi_futures:
-                    print(f.result())
+        try:
+            config = parse_service_config('services.config')
+            if config is None:
+                print('[!] Error with config')
             else:
-                print('[!] No services specified')
+                z.services = list(config['SERVICES'].keys())
+                if z.services:
+                    z.services = ['OS'] + z.services
+                    # set up threading
+                    wmi_futures = []
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as wmi_executor:
+                        for host in z:
+                            for i in range(4): # testing
+                                if 445 in host.open_ports:
+                                    try:
+                                        while 1:
+                                            failed_login = lockout_queue.get_nowait()
+                                            if failed_login == 1:
+                                                lockout_counter += 1
+                                                #print('[!] LOGON FAILURE ON {}'.format(str(host)))
+                                            else:
+                                                print('[+] Successful authentication on {}'.format(str(host)))
+                                                lockout_counter = 0
+                                    except queue.Empty:
+                                        pass
+
+                                    assert lockout_counter < options.ufail_limit
+                                    wmi_futures.append(wmi_executor.submit(host.get_services, config, lockout_queue))
+                                    sleep(1)
+                                    #host.get_services(config)
+
+                        wmi_executor.shutdown(wait=True)
+
+                    #for f in wmi_futures:
+                    #    print(f.result())
+
+                    print('=' * 60)
+                    print(wmiexec.report(config, z.hosts_sorted()))
+                    print('=' * 60)
+
+                else:
+                    print('[!] No services specified')
+
+        except AssertionError:
+            print('[!] Logon failure limit reached ({limit}/{limit})'.format(limit=options.ufail_limit))
 
     # write CSV file
     z.write_csv(csv_file=options.csv_file)
@@ -226,6 +260,7 @@ if __name__ == '__main__':
     parser.add_argument('--work-dir', type=Path, default=default_work_dir,      help='custom working directory', metavar='DIR')
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
     parser.add_argument('-n', '--netmask', type=int, default=default_cidr_mask, help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
+    parser.add_argument('--ufail-limit',   type=int, default=3,                 help='limit concurrent failed logins (default: 3)')
 
     try:
 

@@ -44,16 +44,35 @@ class Host(dict):
             self['Hostname'] = hostname
 
 
-    def get_services(self, config):
+    def get_services(self, config, lockout_queue):
 
         w = wmiexec(self['IP Address'], config)
-        os_name, services_detected = w.get_services()
+        try:
+            result = w.get_services()
+        except ServiceEnumException as e:
+            print('[!] Error getting services from {}'.format(str(self)))
+            print(str(e))
+            return
+        except LogonFailureException as e:
+            print('[!] LOGIN FAILURE ON {}'.format(str(self)))
+            print(str(e))
+            lockout_queue.put(1)
+            return
 
-        if os_name:
+        if result:
+            os_name, services_detected = result
+
             self['OS'] = os_name
 
-        for fname,sname in services_detected.items():
-            self[fname] = sname
+            for fname,sname in services_detected.items():
+                self[fname] = sname
+
+            lockout_queue.put(0)
+
+        else:
+            print('[!] No output returned from service enumeration of {}'.format(str(self)))
+
+
 
 
     def __str__(self):

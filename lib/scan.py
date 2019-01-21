@@ -220,7 +220,7 @@ class Zmap:
                 '--bandwidth={}'.format(self.bandwidth), '--target-port={}'.format(port)] + \
                 self.gateway_mac_arg + self.interface_arg + zmap_targets
 
-            print('\n[+] Running zmap SYN scan:\n\t> {}\n'.format(' '.join(zmap_command)))
+            print('\n[+] Running zmap SYN scan on port {}:\n\t> {}\n'.format(port, ' '.join(zmap_command)))
 
             try:
 
