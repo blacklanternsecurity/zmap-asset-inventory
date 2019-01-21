@@ -448,6 +448,7 @@ class Zmap:
                         for cache_file in next(os.walk(target_dir))[2]:
 
                             if cache_file.endswith('.csv'):
+                                print('[+] Reading {}'.format(str(cache_file)))
                                 empty_file, open_ports = self.read_csv(target_dir / cache_file)
 
                                 try:
