@@ -567,10 +567,15 @@ class Zmap:
         ip = ipaddress.ip_address(host['IP Address'])
         in_target = None
         for target in self.targets:
-            if ip in target:
-                #print(str(ip), ' is in ', str(target))
-                in_target = target
-                break
+            try:
+                if ip in target:
+                    #print(str(ip), ' is in ', str(target))
+                    in_target = target
+                    break
+            except TypeError as e:
+                print('target: {}, {}'.format(str(target), str(type(target))))
+                print(str(e))
+                continue
 
         open_ports = dict()
         for port in ports:
