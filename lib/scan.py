@@ -437,6 +437,7 @@ class Zmap:
                 try:
                     target_net = ipaddress.ip_network(target_dir.replace('-', '/'))
                 except ValueError:
+                    print('[!] Found invalid cached folder: {}, skipping'.format(str(target_dir)))
                     continue
 
                 if any([target_net == t for t in self.targets]):
