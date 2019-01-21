@@ -29,7 +29,7 @@ def main(options):
     cache_dir = options.work_dir / 'cache'
     nmap_dir = cache_dir / 'nmap'
 
-    # if starting fresh rename working directory to ".bak"
+    # if starting fresh, rename working directory to ".bak"
     if options.start_fresh:
         backup_cache_dir = Path(str(cache_dir) + '_{date:%Y-%m-%d_%H-%M-%S}.bak'.format( date=datetime.now() ))
         try:

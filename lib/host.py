@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# by TheTechromancer
+
 import socket
 from lib.service_enum import *
 
