@@ -95,24 +95,24 @@ def main(options):
                     wmi_futures = []
                     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as wmi_executor:
                         for host in z:
-                            for i in range(4): # testing
-                                if 445 in host.open_ports:
-                                    try:
-                                        while 1:
-                                            failed_login = lockout_queue.get_nowait()
-                                            if failed_login == 1:
-                                                lockout_counter += 1
-                                                #print('[!] LOGON FAILURE ON {}'.format(str(host)))
-                                            else:
-                                                print('[+] Successful authentication on {}'.format(str(host)))
-                                                lockout_counter = 0
-                                    except queue.Empty:
-                                        pass
+                            #for i in range(4): # testing
+                            if 445 in host.open_ports:
+                                try:
+                                    while 1:
+                                        failed_login = lockout_queue.get_nowait()
+                                        if failed_login == 1:
+                                            lockout_counter += 1
+                                            #print('[!] LOGON FAILURE ON {}'.format(str(host)))
+                                        else:
+                                            print('[+] Successful authentication on {}'.format(str(host)))
+                                            lockout_counter = 0
+                                except queue.Empty:
+                                    pass
 
-                                    assert lockout_counter < options.ufail_limit
-                                    wmi_futures.append(wmi_executor.submit(host.get_services, config, lockout_queue))
-                                    sleep(1)
-                                    #host.get_services(config)
+                                assert lockout_counter < options.ufail_limit
+                                wmi_futures.append(wmi_executor.submit(host.get_services, config, lockout_queue))
+                                sleep(1)
+                                #host.get_services(config)
 
                         wmi_executor.shutdown(wait=True)
 
@@ -260,7 +260,7 @@ if __name__ == '__main__':
     parser.add_argument('--work-dir', type=Path, default=default_work_dir,      help='custom working directory', metavar='DIR')
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
     parser.add_argument('-n', '--netmask', type=int, default=default_cidr_mask, help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
-    parser.add_argument('--ufail-limit',   type=int, default=3,                 help='limit concurrent failed logins (default: 3)')
+    parser.add_argument('--ufail-limit',   type=int, default=3,                 help='limit consecutive failed logins (default: 3)')
 
     try:
 
