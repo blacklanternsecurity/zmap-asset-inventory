@@ -6,6 +6,7 @@ import os
 import csv
 import sys
 import queue
+import random
 import argparse
 import ipaddress
 import subprocess as sp
@@ -85,10 +86,10 @@ def main(options):
         lockout_counter = 0
 
         wmiexec_output = dict()
+        config = parse_service_config('services.config')
 
         # parse services.config
         try:
-            config = parse_service_config('services.config')
             if config is None:
                 print('[!] Error with config')
             else:
@@ -98,7 +99,8 @@ def main(options):
                     # set up threading
                     wmi_futures = []
                     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as wmi_executor:
-                        for host in z:
+                        shuffled_hosts = random.sample(z.hosts, len(z.hosts)).values()
+                        for host in shuffled_hosts:
                             #for i in range(4): # testing
                             if 445 in host.open_ports:
                                 try:
@@ -136,15 +138,18 @@ def main(options):
                     #for f in wmi_futures:
                     #    print(f.result())
 
-                    print('=' * 60)
-                    print(wmiexec.report(config, z.hosts_sorted()))
-                    print('=' * 60)
-
                 else:
                     print('[!] No services specified')
 
         except AssertionError:
             print('[!] Logon failure limit reached ({limit}/{limit})'.format(limit=options.ufail_limit))
+        finally:
+            try:
+                print('=' * 60)
+                print(wmiexec.report(config, z.hosts_sorted()))
+                print('=' * 60)
+            except:
+                pass
 
     # write CSV file
     z.write_csv(csv_file=options.csv_file)
