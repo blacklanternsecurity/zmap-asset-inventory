@@ -128,10 +128,10 @@ def main(options):
                     print('[+] Writing raw command output to {}'.format(raw_output_file))
                     with open(raw_output_file, 'w') as f:
                         for ip, output in wmiexec_output.items():
-                            f.write('=' * 10)
-                            f.write(str(ip))
-                            f.write('=' * 5)
-                            f.write(str(output))
+                            f.write('=' * 10 + '\n')
+                            f.write(str(ip) + '\n')
+                            f.write('=' * 5 + '\n')
+                            f.write(str(output) + '\n')
 
                     #for f in wmi_futures:
                     #    print(f.result())
