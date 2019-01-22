@@ -71,6 +71,8 @@ def main(options):
         for port in options.ports:
             zmap_out_file = z.scan_online_hosts(port)
             if zmap_out_file is not None:
+                print(zmap_out_file)
+                print(type(zmap_out_file))
                 print('\n[+] Port scan results for {}/TCP written to {}'.format(port, str(zmap_out_file)))
 
 
