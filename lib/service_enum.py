@@ -178,11 +178,11 @@ class wmiexec:
         for host in hosts:
             try:
                 os = host['OS']
-                    
-                try:
-                    os_stats[os] += 1
-                except KeyError:
-                    os_stats[os] = 1
+                if os.upper() != 'UNKNOWN':
+                    try:
+                        os_stats[os] += 1
+                    except KeyError:
+                        os_stats[os] = 1
 
                 for fname,sname in service_names:
                     host_has_service = host[fname]
