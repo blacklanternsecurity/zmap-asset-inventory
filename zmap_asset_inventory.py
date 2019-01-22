@@ -99,7 +99,7 @@ def main(options):
                     # set up threading
                     wmi_futures = []
                     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as wmi_executor:
-                        shuffled_hosts = random.sample(list(z.hosts.values), len(z.hosts))
+                        shuffled_hosts = random.sample(list(z.hosts.values()), len(z.hosts))
                         for host in shuffled_hosts:
                             #for i in range(4): # testing
                             if 445 in host.open_ports:
