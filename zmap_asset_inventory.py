@@ -57,7 +57,7 @@ def main(options):
         skip_ping=options.skip_ping, blacklist=options.blacklist, \
         interface=options.interface, gateway_mac=options.gateway_mac)
 
-    # jdo host discovery
+    # do host discovery
     for host in z:
         pass
 
@@ -211,7 +211,8 @@ def str_to_network(s):
             else:
                 raise ValueError()
         else:
-            yield ipaddress.ip_network(s, strict=False)
+            net = ipaddress.ip_network(s, strict=False)
+            yield net
 
     except ValueError:
         print('[!] Cannot create host/network from "{}"'.format(str(s)))
@@ -244,9 +245,10 @@ if __name__ == '__main__':
     default_bandwidth = '1M'
     default_work_dir = Path.home() / '.asset_inventory'
     default_cidr_mask = 24
+    default_networks = [[ipaddress.ip_network(n)] for n in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']]
 
     parser = argparse.ArgumentParser("Scan private IP ranges, output to CSV")
-    parser.add_argument('-t', '--targets', type=str_to_network, nargs='+', default=[['10.0.0.0/8'], ['172.16.0.0/12'], ['192.168.0.0/16']], help='target network(s) to scan', metavar='STR')
+    parser.add_argument('-t', '--targets', type=str_to_network, nargs='+',      default=default_networks, help='target network(s) to scan', metavar='STR')
     parser.add_argument('-B', '--bandwidth', default=default_bandwidth,         help='max egress bandwidth (default {})'.format(default_bandwidth), metavar='STR')
     parser.add_argument('-i', '--interface',                                    help='interface from which to scan (e.g. eth0)', metavar='IFC')
     parser.add_argument('-G', '--gateway-mac',                                  help='MAC address of default gateway', metavar='MAC')

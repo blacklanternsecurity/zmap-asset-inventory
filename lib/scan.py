@@ -25,7 +25,10 @@ class Zmap:
         # { target: { port: open_count ... } ... }
         self.targets = dict()
         for target in targets:
-            self.targets[target]        = dict()
+            if type(target) == ipaddress.IPv4Address or type(target) == ipaddress.IPv4Network:
+                self.targets[target]        = dict()
+            else:
+                raise ValueError('Invalid type for target: {}'.format(str(type(target))))
 
         # global open port counters
         # dictionary in format:
@@ -144,7 +147,7 @@ class Zmap:
         # then sort by host count
         summarized_hosts.sort(key=lambda x: x[1], reverse=True)
         for subnet in summarized_hosts:
-            print('\t{:<19}{:<10}'.format(str(subnet[0]), ' ({:,})'.format(subnet[1])))
+            print('\t{:<19}{:<10}'.format(str(subnet[0]), ' ({:,} | {:.2f}%)'.format(subnet[1], subnet[1]/len(self.hosts)*100)))
 
         print('')
         for port, open_port_count in self.open_ports.items():
@@ -436,19 +439,21 @@ class Zmap:
 
                 try:
                     target_net = ipaddress.ip_network(target_dir.replace('-', '/'))
+                    print('[+] Found folder: {}'.format(str(self.work_dir / target_dir)))
                 except ValueError:
-                    print('[!] Found invalid cached folder: {}, skipping'.format(str(target_dir)))
+                    # print('[!] Found invalid cached folder: {}, skipping'.format(str(target_dir)))
                     continue
 
-                if any([target_net == t for t in self.targets]):
+                if not any([target_net == t for t in self.targets]):
+                    print('[i]  - directory does not match any given target')
 
+                else:
                     target_dir = self.work_dir / target_dir
 
                     try:
                         for cache_file in next(os.walk(target_dir))[2]:
-
                             if cache_file.endswith('.csv'):
-                                print('[+] Reading {}'.format(str(cache_file)))
+                                #print('[+] Reading {}'.format(str(cache_file)))
                                 empty_file, open_ports = self.read_csv(target_dir / cache_file)
 
                                 try:
@@ -457,8 +462,10 @@ class Zmap:
                                     self.targets[target_net] = open_ports
 
                                 if not empty_file:
-                                    print('[+] Found cached data for {}'.format(str(target_net)))
+                                    print('[+]  - contains cached data'.format(str(target_net)))
                                     cached_targets.append(target_net)
+                                else:
+                                    print('[!] - cache file appears to be empty')
 
                     except StopIteration:
                         continue
@@ -497,6 +504,7 @@ class Zmap:
                     ip = ipaddress.ip_address(line['IP Address'])
                     empty_file = False
                 except ValueError:
+                    #print('[!] Invalid IP address: {}'.format(str(line['IP Address'])))
                     continue
 
                 host = Host(ip=ip, hostname=line['Hostname'])
@@ -575,6 +583,18 @@ class Zmap:
                     in_target = target
                     break
             except TypeError as e:
+                '''
+                Traceback (most recent call last):
+                  File "./zmap_asset_inventory.py", line 275, in <module>
+                    main(options)
+                  File "./zmap_asset_inventory.py", line 133, in main
+                    z.write_csv(csv_file=options.csv_file)
+                  File "/root/Downloads/zmap-asset-inventory/lib/scan.py", line 382, in write_csv
+                    self._write_csv_line(csv_writer, host)
+                  File "/root/Downloads/zmap-asset-inventory/lib/scan.py", line 570, in _write_csv_line
+                    if ip in target:
+                TypeError: 'in <string>' requires string as left operand, not IPv4Address
+                '''
                 print('target: {}, {}'.format(str(target), str(type(target))))
                 print(str(e))
                 continue
