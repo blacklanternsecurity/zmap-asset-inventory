@@ -84,7 +84,7 @@ def main(options):
         lockout_queue = queue.Queue()
         lockout_counter = 0
 
-        wmiexec_output = []
+        wmiexec_output = dict()
 
         # parse services.config
         try:
@@ -115,7 +115,7 @@ def main(options):
 
                                 assert lockout_counter < options.ufail_limit
                                 wmi_futures.append(wmi_executor.submit(host.get_services, config, lockout_queue))
-                                sleep(1)
+                                sleep(.75)
                                 #host.get_services(config)
 
                         wmi_executor.shutdown(wait=True)

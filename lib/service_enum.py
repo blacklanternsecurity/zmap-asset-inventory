@@ -154,7 +154,7 @@ class wmiexec:
         wmiexec_command = [wmiexec_script] + self.wmi_auth + [command]
 
         # print(' >> ' + ' '.join(wmiexec_command))
-        wmiexec_process = sp.run(wmiexec_command, stdout=sp.PIPE, stderr=sp.PIPE)
+        wmiexec_process = sp.run(wmiexec_command, stdout=sp.PIPE, stderr=sp.PIPE, timeout=timeout)
         self.raw_stdout = wmiexec_process.stdout.decode()
         self.raw_stderr = wmiexec_process.stderr.decode()
         return (self.raw_stdout, self.raw_stderr)
