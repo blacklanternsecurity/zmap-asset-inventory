@@ -82,6 +82,8 @@ def main(options):
         lockout_queue = queue.Queue()
         lockout_counter = 0
 
+        wmiexec_output = []
+
         # parse services.config
         try:
             config = parse_service_config('services.config')
@@ -115,6 +117,19 @@ def main(options):
                                 #host.get_services(config)
 
                         wmi_executor.shutdown(wait=True)
+
+                    for host in z:
+                        if host.raw_wmiexec_output:
+                            wmiexec_output[host['IP Address']] = host.raw_wmiexec_output
+
+                    raw_output_file = str(cache_dir / 'raw_wmiexec_output_{date:%Y-%m-%d_%H-%M-%S}.txt'.format( date=datetime.now() ))
+                    print('[+] Writing raw command output to {}'.format(raw_output_file))
+                    with open(raw_output_file, 'w') as f:
+                        for ip, output in wmiexec_output.items():
+                            f.write('=' * 10)
+                            f.write(str(ip))
+                            f.write('=' * 5)
+                            f.write(str(output))
 
                     #for f in wmi_futures:
                     #    print(f.result())

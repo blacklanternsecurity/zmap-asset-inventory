@@ -52,7 +52,7 @@ class wmiexec:
 
     def __init__(self, target, config):
 
-        self.target   = target
+        self.target   = target['IP Address']
         self.username = config['CREDENTIALS']['username']
         self.password = config['CREDENTIALS']['password']
         self.domain   = config['CREDENTIALS']['domain']
@@ -61,11 +61,17 @@ class wmiexec:
 
         self.wmi_auth = ''
 
+        self.raw_output = ''
+
         self.ticket = False
         if not self.username or not (self.password or self.hashes):
             try:
                 os.environ['KRB5CCNAME']
                 self.wmi_auth = ['-k', '-no-pass', self.target]
+                if target['Hostname']:
+                    self.target = target['Hostname']
+                else:
+                    raise ValueError('Ticket authentication needs valid hostname, none found for {}, skipping'.format(str(target['IP Address'])))
             except KeyError:
                 raise ValueError('Kerberos ticket not found, please export "KRB5CCNAME" variable')
         elif self.password:
@@ -149,7 +155,9 @@ class wmiexec:
 
         # print(' >> ' + ' '.join(wmiexec_command))
         wmiexec_process = sp.run(wmiexec_command, stdout=sp.PIPE, stderr=sp.PIPE)
-        return (wmiexec_process.stdout.decode(), wmiexec_process.stderr.decode())
+        self.raw_stdout = wmiexec_process.stdout.decode()
+        self.raw_stderr = wmiexec_process.stderr.decode()
+        return (self.raw_stdout, self.raw_stderr)
 
 
     @staticmethod

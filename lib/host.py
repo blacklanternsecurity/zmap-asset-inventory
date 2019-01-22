@@ -25,6 +25,8 @@ class Host(dict):
         if resolve:
             self.resolve()
 
+        self.raw_wmiexec_output = ''
+
 
     def resolve(self):
 
@@ -48,7 +50,7 @@ class Host(dict):
 
     def get_services(self, config, lockout_queue):
 
-        w = wmiexec(self['IP Address'], config)
+        w = wmiexec(self, config)
         try:
             result = w.get_services()
         except ServiceEnumException as e:
@@ -70,6 +72,8 @@ class Host(dict):
                 self[fname] = sname
 
             lockout_queue.put(0)
+
+            self.raw_wmiexec_output = w.raw_stdout + w.raw_stderr
 
         else:
             print('[!] No output returned from service enumeration of {}'.format(str(self)))
