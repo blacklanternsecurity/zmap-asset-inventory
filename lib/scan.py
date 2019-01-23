@@ -110,6 +110,14 @@ class Zmap:
         if hosts is None:
             hosts_sorted = list(self.hosts.values())
         else:
+            for host in hosts:
+                host = Host(h)
+                try:
+                    host['Hostname'] = self.hosts[host['IP Address']]
+                except KeyError:
+                    pass
+                finally:
+                    hosts_sorted.append(host)
             hosts_sorted = [Host(h) for h in hosts]
 
         hosts_sorted.sort(key=lambda x: ipaddress.ip_address(x['IP Address']))
