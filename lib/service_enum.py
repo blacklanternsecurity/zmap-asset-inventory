@@ -130,8 +130,8 @@ class wmiexec:
             services_detected[fname] = 'No'
 
             for s in svc_str:
-                svc_name = s.split(':')[-1].strip().upper()
-                if sname == svc_name:
+                svc_name = ':'.join(s.split(':')[1:]).strip().upper()
+                if sname in svc_name:
                     services_detected[fname] = 'Yes'
                     break
 

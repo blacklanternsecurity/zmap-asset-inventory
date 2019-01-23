@@ -126,15 +126,6 @@ def main(options):
                         if host.raw_wmiexec_output:
                             wmiexec_output[host['IP Address']] = host.raw_wmiexec_output
 
-                    raw_output_file = str(cache_dir / 'raw_wmiexec_output_{date:%Y-%m-%d_%H-%M-%S}.txt'.format( date=datetime.now() ))
-                    print('[+] Writing raw command output to {}'.format(raw_output_file))
-                    with open(raw_output_file, 'w') as f:
-                        for ip, output in wmiexec_output.items():
-                            f.write('=' * 10 + '\n')
-                            f.write(str(ip) + '\n')
-                            f.write('=' * 5 + '\n')
-                            f.write(str(output) + '\n')
-
                     #for f in wmi_futures:
                     #    print(f.result())
 
@@ -144,6 +135,17 @@ def main(options):
         except AssertionError:
             print('[!] Logon failure limit reached ({limit}/{limit})'.format(limit=options.ufail_limit))
         finally:
+            try:
+                raw_output_file = str(cache_dir / 'raw_wmiexec_output_{date:%Y-%m-%d_%H-%M-%S}.txt'.format( date=datetime.now() ))
+                print('[+] Writing raw command output to {}'.format(raw_output_file))
+                with open(raw_output_file, 'w') as f:
+                    for ip, output in wmiexec_output.items():
+                        f.write('=' * 10 + '\n')
+                        f.write(str(ip) + '\n')
+                        f.write('=' * 5 + '\n')
+                        f.write(str(output) + '\n')
+            except:
+                pass
             try:
                 print('=' * 60)
                 print(wmiexec.report(config, z.hosts_sorted()))

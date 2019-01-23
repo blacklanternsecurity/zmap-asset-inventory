@@ -508,8 +508,8 @@ class Zmap:
                     continue
 
                 host = Host(ip=ip, hostname=line['Hostname'])
-                vulnerable_to_eb = line['Vulnerable to EternalBlue'].capitalize()
-                if vulnerable_to_eb == 'Yes':
+                vulnerable_to_eb = line['Vulnerable to EternalBlue']
+                if vulnerable_to_eb.capitalize() == 'Yes':
                     self.eternal_blue_count += 1
                 host['Vulnerable to EternalBlue'] = vulnerable_to_eb
 
