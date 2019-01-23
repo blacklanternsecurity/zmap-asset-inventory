@@ -315,11 +315,11 @@ class Zmap:
     def get_network_delta(self, sub_range_file, netmask=24):
         '''
         takes file containing newtork hosts/ranges
-        returns dictionary:
-        {
-            network: host_count,
+        returns list:
+        [
+            (network:], host_count),
             ...
-        }
+        ]
         '''
 
         stray_hosts = self.get_host_delta(sub_range_file)

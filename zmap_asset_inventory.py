@@ -181,13 +181,15 @@ def main(options):
 
             max_display_count = 20
             for network in stray_networks:
-                csv_file.writerow({'Network': str(network[0]), 'Host Count': str(network[1])})
                 #print('\t{:<16}{}'.format(str(network[0]), network[1]))
                 print('\t{:<19}{:<10}'.format(str(network[0]), ' ({:,})'.format(network[1])))
                 max_display_count -= 1
                 if max_display_count <= 0:
                     print('\t...')
                     break
+
+            for network in stray_networks:
+                csv_file.writerow({'Network': str(network[0]), 'Host Count': str(network[1])})
 
         stray_hosts = z.get_host_delta(options.diff)
         stray_hosts_csv = './host_diff_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now())
