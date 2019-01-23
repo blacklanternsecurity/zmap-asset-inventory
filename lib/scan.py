@@ -9,6 +9,7 @@ import sys
 import tempfile
 import ipaddress
 from time import sleep
+from lib.host import *
 import subprocess as sp
 from pathlib import Path
 from lib.host import Host

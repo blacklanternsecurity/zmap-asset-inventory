@@ -5,6 +5,34 @@
 import socket
 from lib.service_enum import *
 
+
+def str_to_network(s):
+    '''
+    takes either CIDR or range notation as string
+    generates ip_network objects
+    '''
+
+    try:
+        if '-' in s:
+            if s.count('-') == 1:
+                start, end = [p.strip() for p in s.split('-')[:2]]
+                for i in ipaddress.summarize_address_range(ipaddress.ip_address(start), ipaddress.ip_address(end)):
+                    yield i
+            else:
+                raise ValueError()
+        else:
+            net = ipaddress.ip_network(s, strict=False)
+            yield net
+
+    except ValueError:
+        print('[!] Cannot create host/network from "{}"'.format(str(s)))
+        print('     Accepted formats are:')
+        print('      192.168.0.0/24')
+        print('      192.168.0.0-192.168.0.255')
+
+
+
+
 class Host(dict):
 
     def __init__(self, ip, hostname=None, resolve=False):
