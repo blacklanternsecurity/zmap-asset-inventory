@@ -3,6 +3,7 @@
 # by TheTechromancer
 
 import socket
+import ipaddress
 from lib.service_enum import *
 
 
