@@ -328,7 +328,7 @@ class Zmap:
             for line in lines:
                 try:
                     for network in str_to_network(line):
-                        sub_ranges.add((network.network_address, netmask), strict=False)
+                        sub_ranges.add(ipaddress.ip_network((network.network_address, netmask), strict=False))
                 except ValueError as e:
                     print('[!] Bad entry in {}:'.format(str(sub_host_file)))
                     print('     {}'.format(str(e)))
