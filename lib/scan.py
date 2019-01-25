@@ -312,7 +312,7 @@ class Zmap:
                 self.blacklist = str(self.blacklist.resolve())
 
 
-    def get_network_delta(self, sub_range_file, netmask=24):
+    def get_network_delta(self, sub_host_file, netmask=24):
         '''
         takes file containing newtork hosts/ranges
         returns list:
@@ -322,9 +322,27 @@ class Zmap:
         ]
         '''
 
-        stray_hosts = self.get_host_delta(sub_range_file)
+        sub_ranges = set()
+        with open(sub_host_file) as f:
+            lines = [line.strip() for line in f.readlines()]
+            for line in lines:
+                try:
+                    for network in str_to_network(line):
+                        sub_ranges.add((network.network_address, netmask), strict=False)
+                except ValueError as e:
+                    print('[!] Bad entry in {}:'.format(str(sub_host_file)))
+                    print('     {}'.format(str(e)))
 
-        stray_networks = list(self.summarize_online_hosts(hosts=stray_hosts, netmask=netmask).items())
+        stray_networks = dict()
+        for h in hosts:
+            if not any([h in s for s in sub_ranges]):
+                host_net = ipaddress.ip_network((h, netmask), strict=False)
+                try:
+                    stray_networks[host_net] += 1
+                except KeyError:
+                    stray_networks[host_net] = 1
+
+        str_networks = list(stray_networks.items())
         stray_networks.sort(key=lambda x: x[1], reverse=True)
 
         return stray_networks
