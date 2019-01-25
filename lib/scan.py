@@ -333,6 +333,9 @@ class Zmap:
                     print('[!] Bad entry in {}:'.format(str(sub_host_file)))
                     print('     {}'.format(str(e)))
 
+
+        hosts = [ipaddress.ip_address(i) for i in self.hosts]
+        
         stray_networks = dict()
         for h in hosts:
             if not any([h in s for s in sub_ranges]):
