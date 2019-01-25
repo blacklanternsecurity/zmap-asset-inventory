@@ -335,7 +335,7 @@ class Zmap:
 
 
         hosts = [ipaddress.ip_address(i) for i in self.hosts]
-        
+
         stray_networks = dict()
         for h in hosts:
             if not any([h in s for s in sub_ranges]):
@@ -345,7 +345,7 @@ class Zmap:
                 except KeyError:
                     stray_networks[host_net] = 1
 
-        str_networks = list(stray_networks.items())
+        stray_networks = list(stray_networks.items())
         stray_networks.sort(key=lambda x: x[1], reverse=True)
 
         return stray_networks
