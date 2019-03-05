@@ -2,6 +2,12 @@
 
 # by TheTechromancer
 
+'''
+TODO:
+    --scan-eternal-blue doesn't work if port 445 has already been scanned:
+        - it scans 445 again (no new hosts found, most likely)
+'''
+
 import os
 import csv
 import sys

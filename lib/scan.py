@@ -241,7 +241,7 @@ class Zmap:
 
                 open_port_count = 0
 
-                hosts_written = False
+                new_ports_found = False
                 with open(zmap_out_file, 'w') as f:
                     for line in io.TextIOWrapper(self.secondary_zmap_process.stdout, encoding='utf-8'):
 
@@ -256,14 +256,16 @@ class Zmap:
 
                         print('[+] {:<23}{:<10}'.format('{}:{}'.format(str(ip), port), self.hosts[ip]['Hostname']))
 
+                        # write IP to file even if the port was previouslyfound
+                        # for scanning eternal blue, etc.
+                        f.write(str(ip) + '\n')
+
                         if port not in self.hosts[ip].open_ports:
                             self.hosts[ip].open_ports.add(port)
                             open_port_count += 1
+                            new_ports_found = True
 
-                            f.write(str(ip) + '\n')
-                            hosts_written = True
-
-                if not hosts_written:
+                if not new_ports_found:
                     print('[!] No new hosts found with port {} open'.format(port))
                     return
 
