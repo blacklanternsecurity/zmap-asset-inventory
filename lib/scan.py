@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.7
 
 # by TheTechromancer
 
@@ -10,11 +10,12 @@ import tempfile
 import ipaddress
 from time import sleep
 from lib.host import *
+from lib.nmap import *
 import subprocess as sp
 from pathlib import Path
 from lib.host import Host
+from lib.brute_ssh import *
 from datetime import datetime
-import xml.etree.cElementTree as xml # for parsing Nmap output
 
 
 class Zmap:
@@ -27,7 +28,7 @@ class Zmap:
         self.targets = dict()
         for target in targets:
             if type(target) == ipaddress.IPv4Address or type(target) == ipaddress.IPv4Network:
-                self.targets[target]        = dict()
+                self.targets[target]    = dict()
             else:
                 raise ValueError('Invalid type for target: {}'.format(str(type(target))))
 
@@ -128,20 +129,38 @@ class Zmap:
 
         print('\n[+] Scanning for EternalBlue')
 
-        nmap_input_file = self.scan_online_hosts(port=445)
+        nmap_input_file, new_ports_found = self.scan_online_hosts(port=445)
 
         if nmap_input_file is None:
-            return
+            # make temporary input file for nmap
+            nmap_input_file = str(self.work_dir / 'tmp/nmap_eternalblue_hosts_to_scan')
+            with open(nmap_input_file, 'w') as f:
+                for host in self:
+                    if 445 in host.open_ports:
+                        f.write(str(host['IP Address']) + '\n')
 
-        else:
-            for ip, vulnerable in Nmap(nmap_input_file, work_dir=self.work_dir / 'nmap'):
-                if vulnerable:
-                    self.eternal_blue_count += 1
-                    if not ip in self.hosts:
-                        self.hosts[ip] = Host(ip)
-                    self.hosts[ip]['Vulnerable to EternalBlue'] = 'Yes'
-                else:
-                    self.hosts[ip]['Vulnerable to EternalBlue'] = 'No'
+        for ip, vulnerable in Nmap(nmap_input_file, work_dir=self.work_dir / 'nmap'):
+            if vulnerable:
+                self.eternal_blue_count += 1
+                if not ip in self.hosts:
+                    self.hosts[ip] = Host(ip)
+                self.hosts[ip]['Vulnerable to EternalBlue'] = 'Yes'
+            else:
+                self.hosts[ip]['Vulnerable to EternalBlue'] = 'No'
+
+
+
+    def brute_ssh(self):
+
+        print('\n[+] Checking for default SSH creds')
+
+        patator_input_file, new_ports_found = self.scan_online_hosts(port=22)
+
+        patator_targets = [h.ip for h in self.hosts.values() if 22 in h.open_ports]
+
+        patator = Patator(patator_targets, work_dir=self.work_dir / 'patator')
+        patator.scan()
+
 
 
     def report(self, netmask=24):
@@ -181,7 +200,7 @@ class Zmap:
             pass
 
         port = int(port)
-        zmap_out_file = self.work_dir / 'zmap_port_{}_{date:%Y-%m-%d_%H-%M-%S}.txt'.format(port, date=datetime.now())
+        zmap_out_file = self.work_dir / 'zmap/zmap_port_{}_{date:%Y-%m-%d_%H-%M-%S}.txt'.format(port, date=datetime.now())
         zmap_whitelist_file = self.work_dir / '.zmap_tmp_whitelist_port_{}.txt'.format(port)
         targets = [t[0] for t in self.targets.items() if port not in t[1]]
 
@@ -212,19 +231,19 @@ class Zmap:
 
             if not hosts_written:
                 print('[+] No hosts to scan on port {}'.format(port))
-                return
+                return (None, 0)
             else:
                 print('[+] Scanning {:,} hosts on port {}'.format(len(self.hosts), port))
 
         self.secondary_zmap_started = True
 
-        # run the main scan if it hasn't already completed
+        # run the ping scan if it hasn't already completed
         for host in self:
             pass
 
         if not zmap_targets:
             print('[!] No targets to scan')
-            return
+            return (None, 0)
 
         else:
 
@@ -241,7 +260,7 @@ class Zmap:
 
                 open_port_count = 0
 
-                hosts_written = False
+                new_ports_found = False
                 with open(zmap_out_file, 'w') as f:
                     for line in io.TextIOWrapper(self.secondary_zmap_process.stdout, encoding='utf-8'):
 
@@ -256,16 +275,17 @@ class Zmap:
 
                         print('[+] {:<23}{:<10}'.format('{}:{}'.format(str(ip), port), self.hosts[ip]['Hostname']))
 
+                        # write IP to file even if the port was previouslyfound
+                        # for scanning eternal blue, etc.
+                        f.write(str(ip) + '\n')
+
                         if port not in self.hosts[ip].open_ports:
                             self.hosts[ip].open_ports.add(port)
                             open_port_count += 1
+                            new_ports_found = True
 
-                            f.write(str(ip) + '\n')
-                            hosts_written = True
-
-                if not hosts_written:
+                if not new_ports_found:
                     print('[!] No new hosts found with port {} open'.format(port))
-                    return
 
                 if open_port_count > 0:
                     try:
@@ -283,7 +303,7 @@ class Zmap:
                 # remove temporary whitelist file
                 # zmap_whitelist_file.unlink()
 
-        return zmap_out_file
+        return (zmap_out_file, new_ports_found)
 
 
     def update_config(self, bandwidth, work_dir, blacklist=None):
@@ -699,76 +719,3 @@ class Zmap:
 
         self.primary_zmap_started = False
         self.host_discovery_finished = True
-
-
-
-
-class Nmap:
-
-    def __init__(self, targets_file, work_dir):
-
-        self.process            = None
-        self.output_file        = str(work_dir / 'nmap_ms17-010')
-        self.finished           = False
-        self.targets_file       = str(targets_file)
-
-        self.hosts = dict()
-
-
-    def __iter__(self):
-        '''
-        Yields IP and boolean representing whether or not it's vulnerable
-        '''
-
-        if not self.finished:
-
-            command = ['nmap', '-p445', '-T5', '-n', '-Pn', '-v', '-sV', \
-                '--script=smb-vuln-ms17-010', '-oA', self.output_file, \
-                '-iL', self.targets_file]
-
-            print('\n[+] Running nmap:\n\t> {}'.format(' '.join(command)))
-
-            try:
-                self.process = sp.run(command, check=True)
-            except sp.CalledProcessError as e:
-                sys.stderr.write('[!] Error launching nmap: {}\n'.format(str(e)))
-                sys.exit(1)
-
-            print('\n[+] Finished Nmap scan')
-
-            # parse xml
-            tree = xml.parse(self.output_file + '.xml')
-
-            for host in tree.findall('host'):
-                pass
-
-                ip = None
-                for address in host.findall('address'):
-                    if address.attrib['addrtype'] == 'ipv4':
-                        try:
-                            ip = ipaddress.ip_address(address.attrib['addr'])
-                        except ValueError:
-                            continue
-                        break
-
-                if ip is None:
-                    continue
-
-                else:
-                    self.hosts[ip] = Host(ip)
-                    for hostscript in host.findall('hostscript'):
-                        for script in hostscript.findall('script'):
-                            if script.attrib['id'] == 'smb-vuln-ms17-010' and 'VULNERABLE' in script.attrib['output']:
-                                self.hosts[ip]['Vulnerable to EternalBlue'] = 'Yes'
-                                yield (ip, True)
-                            else:
-                                self.hosts[ip]['Vulnerable to EternalBlue'] = 'No'
-                                yield (ip, False)
-
-            self.finished = True
-
-        else:
-            for ip, host in self.hosts.items():
-                yield (ip, host['Vulnerable to EternalBlue'] == 'Yes')
-
-        print('[+] Saved Nmap results to {}.*'.format(self.output_file))
