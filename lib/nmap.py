@@ -29,15 +29,15 @@ class Nmap:
                 '--script=smb-vuln-ms17-010', '-oA', self.output_file, \
                 '-iL', self.targets_file]
 
-            print('\n[+] Running nmap:\n\t> {}\n'.format(' '.join(command)))
+            print('\n[+] Checking for EternalBlue with Nmap:\n\t> {}\n'.format(' '.join(command)))
 
             try:
                 self.process = sp.run(command, check=True)
             except sp.CalledProcessError as e:
-                sys.stderr.write('[!] Error launching nmap: {}\n'.format(str(e)))
+                sys.stderr.write('[!] Error launching Nmap: {}\n'.format(str(e)))
                 sys.exit(1)
 
-            print('\n[+] Finished Nmap scan')
+            print('\n[+] Finished EternalBlue Nmap scan')
 
             # parse xml
             tree = xml.parse(self.output_file + '.xml')

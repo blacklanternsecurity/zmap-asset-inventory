@@ -9,7 +9,8 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
 * Ability to calculate delta between scan results and another list
     * Great for finding stray hosts
 * Outputs to CSV
-* Checks for EternalBlue
+* Checks for EternalBlue (optional)
+* Checks for default SSH credentials (optional)
 * Automatic caching of scan results
     * Run additional port scans without waiting for host discovery or DNS lookups 
     * Saves lots of time if scanning > thousands of hosts
@@ -23,11 +24,13 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
 ## Usage:
 ~~~
 # ./zmap_asset_inventory.py --help
-usage: Scan private IP ranges, output to CSV [-h] [-t STR [STR ...]] [-B STR]
-                                             [--blacklist FILE] [-w CSV_FILE]
-                                             [-f] [-p PORTS [PORTS ...]] [-e]
-                                             [--work-dir DIR] [-d FILE]
-                                             [-n NETMASK]
+usage: zmap_asset_inventory.py [-h] [-t STR [STR ...]] [-B STR] [-i IFC]
+                               [-G MAC] [--blacklist FILE] [-w CSV_FILE] [-f]
+                               [-p PORTS [PORTS ...]] [-Pn] [-e] [-s]
+                               [--work-dir DIR] [-d FILE] [-n NETMASK] [--ssh]
+                               [--ufail-limit UFAIL_LIMIT]
+
+Assess the security posture of an internal network
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -35,19 +38,29 @@ optional arguments:
                         target network(s) to scan
   -B STR, --bandwidth STR
                         max egress bandwidth (default 1M)
+  -i IFC, --interface IFC
+                        interface from which to scan (e.g. eth0)
+  -G MAC, --gateway-mac MAC
+                        MAC address of default gateway
   --blacklist FILE      a file containing hosts to exclude from scanning
   -w CSV_FILE, --csv-file CSV_FILE
                         output CSV file
   -f, --start-fresh     don't load results from previous scans
   -p PORTS [PORTS ...], --ports PORTS [PORTS ...]
                         port-scan online hosts
+  -Pn, --skip-ping      skip zmap host-discovery
   -e, --check-eternal-blue
                         scan for EternalBlue
+  -s, --check-services  enumerate select services with wmiexec (see
+                        services.config)
   --work-dir DIR        custom working directory
   -d FILE, --diff FILE  show differences between scan results and IPs/networks
                         from file
   -n NETMASK, --netmask NETMASK
-                        summarize networks with this CIDR mask (default: 24)
+                        summarize networks with this CIDR mask (default 24)
+  --ssh                 scan for default SSH creds (see lib/ssh_creds.txt)
+  --ufail-limit UFAIL_LIMIT
+                        limit consecutive wmiexec failed logins (default: 3)
 ~~~
 
 

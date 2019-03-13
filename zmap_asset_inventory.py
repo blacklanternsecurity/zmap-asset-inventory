@@ -271,7 +271,7 @@ if __name__ == '__main__':
     default_cidr_mask = 24
     default_networks = [[ipaddress.ip_network(n)] for n in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']]
 
-    parser = argparse.ArgumentParser("Scan private IP ranges, output to CSV")
+    parser = argparse.ArgumentParser(description="Assess the security posture of an internal network")
     parser.add_argument('-t', '--targets', type=str_to_network, nargs='+',      default=default_networks, help='target network(s) to scan', metavar='STR')
     parser.add_argument('-B', '--bandwidth', default=default_bandwidth,         help='max egress bandwidth (default {})'.format(default_bandwidth), metavar='STR')
     parser.add_argument('-i', '--interface',                                    help='interface from which to scan (e.g. eth0)', metavar='IFC')
@@ -287,7 +287,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
     parser.add_argument('-n', '--netmask', type=int, default=default_cidr_mask, help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
     parser.add_argument('--ssh',                        action='store_true',    help='scan for default SSH creds (see lib/ssh_creds.txt)')
-    parser.add_argument('--ufail-limit',   type=int, default=3,                 help='limit consecutive failed logins (default: 3)')
+    parser.add_argument('--ufail-limit',   type=int, default=3,                 help='limit consecutive wmiexec failed logins (default: 3)')
 
     try:
 
