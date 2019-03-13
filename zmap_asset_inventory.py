@@ -87,7 +87,7 @@ def main(options):
         try:
             z.brute_ssh()
         except PatatorError as e:
-            sys.stderr.write('[!] {}\n'.format(str(e)))
+            sys.stderr.write('\n[!] {}\n'.format(str(e)))
 
     # scan additional ports if requested
     # only alive hosts are scanned

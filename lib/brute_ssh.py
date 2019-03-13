@@ -79,7 +79,6 @@ class Patator:
                                 valid_creds_found = True
                                 valid_creds.write(line)
                                 print(line)
-                            #sys.stdout.write('\r[+] {:,}')
 
                 self.patator_process = None
 
@@ -91,6 +90,7 @@ class Patator:
             try:
                 self.patator_process.send_signal(SIGINT)
                 sleep(2)
+                self.patator_process.send_signal(SIGINT)
                 self.patator_process.terminate()
             except AttributeError:
                 pass
