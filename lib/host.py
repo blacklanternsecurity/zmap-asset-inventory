@@ -108,6 +108,16 @@ class Host(dict):
             print('[!] No output returned from service enumeration of {}'.format(str(self)))
 
 
+    @property
+    def ip(self):
+
+        return self['IP Address']
+
+
+    @property
+    def hostname(self):
+        
+        return self['Hostname']
 
 
     def __str__(self):

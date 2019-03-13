@@ -4,8 +4,10 @@
 
 '''
 TODO:
+    output "{num} services found on {system}" instead of "Successful Authentication on {system}"
+
     --scan-eternal-blue doesn't work if port 445 has already been scanned:
-        - it scans 445 again (no new hosts found, most likely)
+        - it scans 445 again (then doesn't find any new hosts)
 '''
 
 import os
@@ -22,6 +24,7 @@ from datetime import datetime
 from lib.service_enum import *
 from lib.scan import Nmap, Zmap
 from lib.host import *
+from lib.brute_ssh import *
 
 
 
@@ -36,6 +39,9 @@ def main(options):
 
     cache_dir = options.work_dir / 'cache'
     nmap_dir = cache_dir / 'nmap'
+    zmap_dir = cache_dir / 'zmap'
+    temp_dir = options.work_dir / 'tmp'
+    patator_dir = cache_dir / 'patator'
 
     # if starting fresh, rename working directory to ".bak"
     if options.start_fresh:
@@ -49,6 +55,9 @@ def main(options):
 
     # create directories if they don't exist
     nmap_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+    zmap_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+    temp_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+    patator_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
     # add port 445 if check_services is requested
     if options.check_services:
@@ -73,12 +82,19 @@ def main(options):
     if options.check_eternal_blue:
         z.check_eternal_blue()
 
+    # check for default SSH creds
+    if options.ssh:
+        try:
+            z.brute_ssh()
+        except PatatorError as e:
+            sys.stderr.write('[!] {}\n'.format(str(e)))
+
     # scan additional ports if requested
     # only alive hosts are scanned
     if options.ports:
         for port in options.ports:
-            zmap_out_file = z.scan_online_hosts(port)
-            if zmap_out_file is not None:
+            zmap_out_file, new_hosts_found = z.scan_online_hosts(port)
+            if new_hosts_found:
                 print(zmap_out_file)
                 print(type(zmap_out_file))
                 print('\n[+] Port scan results for {}/TCP written to {}'.format(port, str(zmap_out_file)))
@@ -270,6 +286,7 @@ if __name__ == '__main__':
     parser.add_argument('--work-dir', type=Path, default=default_work_dir,      help='custom working directory', metavar='DIR')
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
     parser.add_argument('-n', '--netmask', type=int, default=default_cidr_mask, help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
+    parser.add_argument('--ssh',                        action='store_true',    help='scan for default SSH creds (see lib/ssh_creds.txt)')
     parser.add_argument('--ufail-limit',   type=int, default=3,                 help='limit consecutive failed logins (default: 3)')
 
     try:
