@@ -59,7 +59,7 @@ class Patator:
             valid_creds_found = False
 
             patator_command = ['patator', 'ssh_login', '--threads={}'.format(self.threads), \
-                'user=COMBO00', 'password=COMBO01', 'host=FILE0', 
+                'user=COMBO00', 'password=COMBO01', 'host=FILE1', 
                 '--max-retries=2', '0={}'.format(self.creds_file),\
                 '1={}'.format(self.targets_file)]
 
