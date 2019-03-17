@@ -59,9 +59,9 @@ class Patator:
             valid_creds_found = False
 
             patator_command = ['patator', 'ssh_login', '--threads={}'.format(self.threads), \
-                'user=COMBO10', 'password=COMBO11', 'host=FILE0', 
-                '--max-retries=2', '1={}'.format(self.creds_file),\
-                '0={}'.format(self.targets_file)]
+                'user=COMBO00', 'password=COMBO01', 'host=FILE1', 
+                '--max-retries=2', '0={}'.format(self.creds_file),\
+                '1={}'.format(self.targets_file)]
 
             print('\n[+] Running patator against {:,} targets:\n\t> {}\n'.format(self.num_targets, ' '.join(patator_command)))
 
