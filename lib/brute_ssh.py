@@ -89,8 +89,9 @@ class Patator:
             print('\n\n[!] Patator interrupted')
             try:
                 self.patator_process.send_signal(SIGINT)
-                sleep(2)
+                sleep(1)
                 self.patator_process.send_signal(SIGINT)
+                sleep(1)
                 self.patator_process.terminate()
             except AttributeError:
                 pass
