@@ -133,7 +133,7 @@ class Zmap:
 
         if nmap_input_file is None:
             # make temporary input file for nmap
-            nmap_input_file = str(self.work_dir / 'tmp/nmap_eternalblue_hosts_to_scan')
+            nmap_input_file = str(self.work_dir / 'nmap/nmap_eternalblue_hosts_to_scan')
             with open(nmap_input_file, 'w') as f:
                 for host in self:
                     if 445 in host.open_ports:
