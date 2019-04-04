@@ -67,11 +67,11 @@ class wmiexec:
         if not self.username or not (self.password or self.hashes):
             try:
                 os.environ['KRB5CCNAME']
-                self.wmi_auth = ['-k', '-no-pass', self.target]
                 if target['Hostname']:
                     self.target = target['Hostname']
                 else:
-                    raise ValueError('Ticket authentication needs valid hostname, none found for {}, skipping'.format(str(target['IP Address'])))
+                    raise ValueError('Ticket authentication needs valid hostname, none found for {}, skipping'.format(str(target['IP Address'])))                
+                self.wmi_auth = ['-k', '-no-pass', '{}/{}@{}'.format(self.domain, self.username, str(self.target))]
             except KeyError:
                 raise ValueError('Kerberos ticket not found, please export "KRB5CCNAME" variable')
         elif self.password:
