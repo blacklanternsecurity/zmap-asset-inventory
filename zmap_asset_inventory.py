@@ -60,7 +60,7 @@ def main(options):
     patator_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
     # add port 445 if check_services is requested
-    if options.check_services:
+    if options.check_services or options.check_eternal_blue:
         if not options.ports:
             options.ports = [445]
         elif not 445 in options.ports:

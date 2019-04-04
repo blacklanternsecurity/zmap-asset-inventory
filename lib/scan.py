@@ -129,15 +129,14 @@ class Zmap:
 
         print('\n[+] Scanning for EternalBlue')
 
-        nmap_input_file, new_ports_found = self.scan_online_hosts(port=445)
+        # nmap_input_file, new_ports_found = self.scan_online_hosts(port=445)
 
-        if nmap_input_file is None:
-            # make temporary input file for nmap
-            nmap_input_file = str(self.work_dir / 'nmap/nmap_eternalblue_hosts_to_scan')
-            with open(nmap_input_file, 'w') as f:
-                for host in self:
-                    if 445 in host.open_ports:
-                        f.write(str(host['IP Address']) + '\n')
+        # make temporary input file for nmap
+        nmap_input_file = str(self.work_dir / 'nmap/nmap_eternalblue_hosts_to_scan')
+        with open(nmap_input_file, 'w') as f:
+            for host in self:
+                if 445 in host.open_ports:
+                    f.write(str(host['IP Address']) + '\n')
 
         for ip, vulnerable in Nmap(nmap_input_file, work_dir=self.work_dir / 'nmap'):
             if vulnerable:
