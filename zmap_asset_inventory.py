@@ -34,6 +34,12 @@ def main(options):
         sys.stderr.write('[!] Must be root\n')
         sys.exit(2)
 
+    # make sure blacklist and whitelist exist
+    if options.blacklist:
+        assert Path(options.blacklist).resolve().is_file(), 'Problem reading blacklist file "{}"'.format(str(options.blacklist))
+    if options.whitelist:
+        assert Path(options.whitelist).resolve().is_file(), 'Problem reading whitelist file "{}"'.format(str(options.whitelist))
+
     # resolve symlinks
     options.work_dir = options.work_dir.resolve()
 
@@ -105,6 +111,16 @@ def main(options):
     if options.check_services:
         print('[+] Retrieving service information for Windows hosts')
 
+        # generate whitelist
+        whitelist = []
+        if options.whitelist is not None:
+            with open(options.whitelist) as f:
+                for line in f.readlines():
+                    try:
+                        whitelist.append(ip_address.ip_network(line.strip()))
+                    except ValueError:
+                        continue
+
         lockout_queue = queue.Queue()
         lockout_counter = 0
 
@@ -126,6 +142,13 @@ def main(options):
                         for host in shuffled_hosts:
                             #for i in range(4): # testing
                             if 445 in host.open_ports:
+
+                                if whitelist:
+                                    # make sure host is in whitelist
+                                    host_ip = ipaddress.ip_address(host.ip)
+                                    if not any([host_ip in entry for entry in whitelist]):
+                                        continue
+
                                 try:
                                     while 1:
                                         failed_login = lockout_queue.get_nowait()
@@ -243,6 +266,10 @@ def main(options):
     z.dump_scan_cache()
 
 
+    if options.combine_all_assets:
+        pass
+
+
 
         #raise ValueError('Cannot create host/network from "{}"'.format(str(s)))
 
@@ -289,6 +316,7 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--netmask', type=int, default=default_cidr_mask, help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
     parser.add_argument('--ssh',                        action='store_true',    help='scan for default SSH creds (see lib/ssh_creds.txt)')
     parser.add_argument('--ufail-limit',   type=int, default=3,                 help='limit consecutive wmiexec failed logins (default: 3)')
+    parser.add_argument('--combine-all-assets',         action='store_true',    help='combine all cached assets and save in current directory')
 
     try:
 
