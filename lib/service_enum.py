@@ -231,21 +231,21 @@ class wmiexec:
 
         report.append('\tGlobal:')
         for service, count in service_stats:
-            report.append('\t\t{}: {:,}/{:,} ({:.2f}%)'.format(service, count, hosts_total, count/hosts_total*100))
+            report.append('\t\t{}: {:,}/{:,} ({:.1f}%)'.format(service, count, hosts_total, count/hosts_total*100))
         for service_name in service_names:
             if service_name[0] not in [s[0] for s in service_stats]:
                 report.append('\t\t{}: 0/{} (0.0%)'.format(service_name[0], hosts_total))
 
         report.append('\tWorkstations:')
         for service, count in service_stats_workstations:
-            report.append('\t\t{}: {:,}/{:,} ({:.2f}%)'.format(service, count, workstations_total, count/workstations_total*100))
+            report.append('\t\t{}: {:,}/{:,} ({:.1f}%)'.format(service, count, workstations_total, count/workstations_total*100))
         for service_name in service_names:
             if service_name[0] not in [s[0] for s in service_stats_workstations]:
                 report.append('\t\t{}: 0/{} (0.0%)'.format(service_name[0], workstations_total))
 
         report.append('\tServers:')
         for service, count in service_stats_servers:
-            report.append('\t\t{}: {:,}/{:,} ({:.2f}%)'.format(service, count, servers_total, count/servers_total*100))
+            report.append('\t\t{}: {:,}/{:,} ({:.1f}%)'.format(service, count, servers_total, count/servers_total*100))
         for service_name in service_names:
             if service_name[0] not in [s[0] for s in service_stats_servers]:
                 report.append('\t\t{}: 0/{} (0.0%)'.format(service_name[0], servers_total))
@@ -254,7 +254,7 @@ class wmiexec:
         os_stats = list(os_stats.items())
         os_stats.sort(key=lambda x: x[1], reverse=True)
         for os, count in os_stats:
-            report.append('\t{}: {:,}/{:,} ({:.2f}%)'.format(os, count, hosts_total, count/hosts_total*100))
+            report.append('\t{}: {:,}/{:,} ({:.1f}%)'.format(os, count, hosts_total, count/hosts_total*100))
 
         return '\n'.join(report)
 
