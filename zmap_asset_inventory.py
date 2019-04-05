@@ -328,10 +328,10 @@ def combine_csv(csv_files):
                         hosts[ip] = dict()
                     else:
                         for k,v in row.items():
-                            if v and not any([v.lower() in ['unknown', 'n/a']]):
+                            if v and not v.lower() in ['unknown', 'n/a']:
                                 # skip if the cell isn't empty
                                 if k in hosts[ip]:
-                                    if hosts[ip][k] and not any([hosts[ip][k].lower() in ['unknown', 'n/a']]):
+                                    if hosts[ip][k] and not hosts[ip][k].lower() in ['unknown', 'n/a']:
                                         continue
                                 hosts[ip].update({k: v})
 
