@@ -218,7 +218,7 @@ class Zmap:
 
         else:
             if self.whitelist_arg:
-                zmap_targets = ['--whitelist-file={}'.format(self.whitelist_arg)]
+                zmap_targets = self.whitelist_arg
             else:
                 zmap_targets = ['--whitelist-file={}'.format(zmap_whitelist_file)]
                 # write target IPs to file for zmap
