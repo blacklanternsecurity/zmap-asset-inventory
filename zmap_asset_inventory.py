@@ -325,7 +325,7 @@ def combine_csv(csv_files):
                     row = dict(row)
                     ip = ipaddress.ip_address(row['IP Address'])
                     if not ip in hosts:
-                        hosts[ip] = dict()
+                        hosts[ip] = row
                     else:
                         for k,v in row.items():
                             if v and not v.lower() in ['unknown', 'n/a']:
