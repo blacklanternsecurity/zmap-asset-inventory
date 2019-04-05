@@ -4,10 +4,10 @@
 
 '''
 TODO:
-    output "{num} services found on {system}" instead of "Successful Authentication on {system}"
+    
+    add --whitelist options which overrides all other inputs
 
-    --scan-eternal-blue doesn't work if port 445 has already been scanned:
-        - it scans 445 again (then doesn't find any new hosts)
+    output "{num} services found on {system}" instead of "Successful Authentication on {system}"
 '''
 
 import os
@@ -72,15 +72,12 @@ def main(options):
 
     z = Zmap(options.targets, options.bandwidth, work_dir=cache_dir, \
         skip_ping=options.skip_ping, blacklist=options.blacklist, \
-        interface=options.interface, gateway_mac=options.gateway_mac)
+        whitelist=options.whitelist, interface=options.interface, \
+        gateway_mac=options.gateway_mac)
 
     # do host discovery
     for host in z:
         pass
-
-    # check for EternalBlue
-    if options.check_eternal_blue:
-        z.check_eternal_blue()
 
     # check for default SSH creds
     if options.ssh:
@@ -95,9 +92,12 @@ def main(options):
         for port in options.ports:
             zmap_out_file, new_hosts_found = z.scan_online_hosts(port)
             if new_hosts_found:
-                print(zmap_out_file)
-                print(type(zmap_out_file))
-                print('\n[+] Port scan results for {}/TCP written to {}'.format(port, str(zmap_out_file)))
+                print('\n[+] Port scan results for {}/TCP written to {}'.format(port, zmap_out_file))
+
+
+    # check for EternalBlue
+    if options.check_eternal_blue:
+        z.check_eternal_blue()
 
 
     # if service enumeration is enabled
@@ -277,6 +277,7 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--interface',                                    help='interface from which to scan (e.g. eth0)', metavar='IFC')
     parser.add_argument('-G', '--gateway-mac',                                  help='MAC address of default gateway', metavar='MAC')
     parser.add_argument('--blacklist',                                          help='a file containing hosts to exclude from scanning', metavar='FILE')
+    parser.add_argument('--whitelist',                                          help='only these hosts (those which overlap with targets) will be scanned', metavar='FILE')
     parser.add_argument('-w', '--csv-file',                                     help='output CSV file', metavar='CSV_FILE')
     parser.add_argument('-f', '--start-fresh',          action='store_true',    help='don\'t load results from previous scans')
     parser.add_argument('-p', '--ports', nargs='+', type=int,                   help='port-scan online hosts')

@@ -20,7 +20,7 @@ from datetime import datetime
 
 class Zmap:
 
-    def __init__(self, targets, bandwidth, work_dir, skip_ping=False, blacklist=None, interface=None, gateway_mac=None):
+    def __init__(self, targets, bandwidth, work_dir, skip_ping=False, blacklist=None, whitelist=None, interface=None, gateway_mac=None):
 
         # target-specific open port counters
         # nested dictionary in format:
@@ -44,6 +44,8 @@ class Zmap:
 
         if interface is None:
             self.interface_arg          = []
+        elif interface.startswith('tun'):
+            self.interface_arg          = ['--interface={}'.format(str(interface)), '--vpn']
         else:
             self.interface_arg          = ['--interface={}'.format(str(interface))]
 
@@ -64,7 +66,7 @@ class Zmap:
         # windows service friendly names for CSV
         self.services                   = []
 
-        self.update_config(bandwidth, work_dir, blacklist)
+        self.update_config(bandwidth, work_dir, blacklist, whitelist)
         self.load_scan_cache()
 
 
@@ -77,7 +79,8 @@ class Zmap:
             zmap_command = ['zmap', '--blacklist-file={}'.format(self.blacklist), \
                 '--bandwidth={}'.format(self.bandwidth), \
                 '--probe-module=icmp_echoscan'] + self.interface_arg + \
-                self.gateway_mac_arg + [str(t) for t in self.zmap_ping_targets]
+                self.gateway_mac_arg + self.whitelist_arg + \
+                [str(t) for t in self.zmap_ping_targets]
 
             print('\n[+] Running zmap ping scan:\n\t> {}\n'.format(' '.join(zmap_command)))
 
@@ -214,25 +217,28 @@ class Zmap:
             zmap_targets = [str(t) for t in targets]
 
         else:
-            zmap_targets = ['--whitelist-file={}'.format(str(zmap_whitelist_file))]
-            # write target IPs to file for zmap
-            hosts_written = False
-            with open(str(zmap_whitelist_file), 'w') as f:
-                for target in targets:
-                    for ip in self.hosts:
-                        if ip in target:
-                            #print(str(ip), ' is in ', str(target))
-                            hosts_written = True
-                            f.write(str(ip) + '\n')
-                        else:
-                            #print(str(ip), ' is not in ', str(target))
-                            pass
-
-            if not hosts_written:
-                print('[+] No hosts to scan on port {}'.format(port))
-                return (None, 0)
+            if self.whitelist_arg:
+                zmap_targets = ['--whitelist-file={}'.format(self.whitelist_arg)]
             else:
-                print('[+] Scanning {:,} hosts on port {}'.format(len(self.hosts), port))
+                zmap_targets = ['--whitelist-file={}'.format(zmap_whitelist_file)]
+                # write target IPs to file for zmap
+                hosts_written = False
+                with open(str(zmap_whitelist_file), 'w') as f:
+                    for target in targets:
+                        for ip in self.hosts:
+                            if ip in target:
+                                #print(str(ip), ' is in ', str(target))
+                                hosts_written = True
+                                f.write(str(ip) + '\n')
+                            else:
+                                #print(str(ip), ' is not in ', str(target))
+                                pass
+
+                if not hosts_written:
+                    print('[+] No hosts to scan on port {}'.format(port))
+                    return (None, 0)
+                else:
+                    print('[+] Scanning {:,} hosts on port {}'.format(len(self.hosts), port))
 
         self.secondary_zmap_started = True
 
@@ -305,7 +311,7 @@ class Zmap:
         return (zmap_out_file, new_ports_found)
 
 
-    def update_config(self, bandwidth, work_dir, blacklist=None):
+    def update_config(self, bandwidth, work_dir, blacklist=None, whitelist=None):
 
         self.bandwidth              = str(bandwidth).upper()
         self.primary_zmap_process   = None
@@ -329,6 +335,17 @@ class Zmap:
                 raise ValueError('Cannot process blacklist file: {}'.format(str(self.blacklist)))
             else:
                 self.blacklist = str(self.blacklist.resolve())
+
+        # validate whitelist arg
+        if whitelist is None:
+            self.whitelist = None
+            self.whitelist_arg = []
+        else:
+            self.whitelist = Path(whitelist)
+            if not self.whitelist.is_file():
+                raise ValueError('Cannot process whitelist file: {}'.format(self.whitelist))
+            else:
+                self.whitelist_arg = ['--whitelist-file={}'.format(str(self.whitelist.resolve()))]
 
 
     def get_network_delta(self, sub_host_file, netmask=24):
