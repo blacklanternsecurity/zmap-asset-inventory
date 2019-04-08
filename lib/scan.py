@@ -17,6 +17,10 @@ from lib.host import Host
 from lib.brute_ssh import *
 from datetime import datetime
 
+# TODO:
+# self.whitelist_file = Path(whitelist)
+# self.whitelist = [ip_network(i) for i in whitelist.readlines()]
+
 
 class Zmap:
 
@@ -180,7 +184,9 @@ class Zmap:
             print('\t{:<19}{:<10}'.format(str(subnet[0]), ' ({:,} | {:.2f}%)'.format(subnet[1], subnet[1]/len(self.hosts)*100)))
 
         print('')
-        for port, open_port_count in self.open_ports.items():
+        open_port_counts = list(self.open_ports.items())
+        open_port_counts.sort(key=lambda x: x[1], reverse=True)
+        for port, open_port_count in open_port_counts:
             print('[+] {:,} host(s) with port {} open ({:.2f}%)'.format(\
                     open_port_count, port, (open_port_count / len(self.hosts) * 100)))
 
@@ -280,7 +286,7 @@ class Zmap:
 
                         print('[+] {:<23}{:<10}'.format('{}:{}'.format(str(ip), port), self.hosts[ip]['Hostname']))
 
-                        # write IP to file even if the port was previouslyfound
+                        # write IP to file even if the port was found previously
                         # for scanning eternal blue, etc.
                         f.write(str(ip) + '\n')
 
@@ -574,9 +580,13 @@ class Zmap:
                     continue
 
                 host = Host(ip=ip, hostname=line['Hostname'])
-                vulnerable_to_eb = line['Vulnerable to EternalBlue']
-                if vulnerable_to_eb.capitalize() == 'Yes':
-                    self.eternal_blue_count += 1
+                vulnerable_to_eb = 'N/A'
+                try:
+                    vulnerable_to_eb = line['Vulnerable to EternalBlue'].capitalize()
+                    if vulnerable_to_eb.lower().startswith('y'):
+                        self.eternal_blue_count += 1
+                except KeyError:
+                    pass
                 host['Vulnerable to EternalBlue'] = vulnerable_to_eb
 
                 # if we've already seen this host, merge it

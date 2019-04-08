@@ -373,7 +373,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--check-services',       action='store_true',    help='enumerate select services with wmiexec (see services.config)')
     parser.add_argument('--work-dir', type=Path, default=default_work_dir,      help='custom working directory', metavar='DIR')
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
-    parser.add_argument('-n', '--netmask', type=int, default=default_cidr_mask, help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
+    parser.add_argument('--netmask',       type=int, default=default_cidr_mask, help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
     parser.add_argument('--ssh',                        action='store_true',    help='scan for default SSH creds (see lib/ssh_creds.txt)')
     parser.add_argument('--ufail-limit',   type=int, default=3,                 help='limit consecutive wmiexec failed logins (default: 3)')
     parser.add_argument('--combine-all-assets',         action='store_true',    help='combine all previous results and save in current directory')
