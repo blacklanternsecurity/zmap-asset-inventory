@@ -24,7 +24,7 @@ from datetime import datetime
 
 class Zmap:
 
-    def __init__(self, targets, bandwidth, work_dir, skip_ping=False, blacklist=None, whitelist=None, interface=None, gateway_mac=None):
+    def __init__(self, targets, bandwidth, work_dir, resolve=True, skip_ping=False, blacklist=None, whitelist=None, interface=None, gateway_mac=None):
 
         # target-specific open port counters
         # nested dictionary in format:
@@ -45,6 +45,9 @@ class Zmap:
         # dictionary in format:
         # { ip_address(): Host() ... }
         self.hosts                      = dict()
+
+        # whether or not to perform reverse DNS lookups
+        self.resolve = resolve
 
         if interface is None:
             self.interface_arg          = []
@@ -503,6 +506,7 @@ class Zmap:
     def load_scan_cache(self):
 
         print('[+] Loading scan cache')
+        print('[+] NOTE: disabling DNS lookups with "-n" will speed up this process significantly')
 
         cached_targets = []
 
@@ -545,6 +549,8 @@ class Zmap:
         except StopIteration:
             return
 
+        print('[+] Loaded {:,} hosts from cache'.format(len(self.hosts)))
+
         for target in self.targets:
             if not target in cached_targets:
                 self.zmap_ping_targets.add(target)
@@ -579,7 +585,7 @@ class Zmap:
                     #print('[!] Invalid IP address: {}'.format(str(line['IP Address'])))
                     continue
 
-                host = Host(ip=ip, hostname=line['Hostname'])
+                host = Host(ip=ip, hostname=line['Hostname'], resolve=self.resolve)
                 vulnerable_to_eb = 'N/A'
                 try:
                     vulnerable_to_eb = line['Vulnerable to EternalBlue'].capitalize()
@@ -735,7 +741,7 @@ class Zmap:
                         ip = ipaddress.ip_address(line.strip())
                     except ValueError:
                         continue
-                    host = Host(ip, resolve=True)
+                    host = Host(ip, resolve=self.resolve)
                     print('[+] {:<17}{:<10} '.format(host['IP Address'], host['Hostname']))
                     self.hosts[ip] = host
                     f.write(str(ip) + '\n')

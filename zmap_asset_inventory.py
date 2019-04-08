@@ -95,8 +95,8 @@ def main(options):
 
     else:
 
-        z = Zmap(options.targets, options.bandwidth, work_dir=cache_dir, \
-            skip_ping=options.skip_ping, blacklist=options.blacklist, \
+        z = Zmap(options.targets, options.bandwidth, resolve=(not options.dont_resolve), \
+            work_dir=cache_dir, skip_ping=options.skip_ping, blacklist=options.blacklist, \
             whitelist=options.whitelist, interface=options.interface, \
             gateway_mac=options.gateway_mac)
 
@@ -360,6 +360,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Assess the security posture of an internal network")
     parser.add_argument('-t', '--targets', type=str_to_network, nargs='+',      default=default_networks, help='target network(s) to scan', metavar='STR')
+    parser.add_argument('-n', '--dont-resolve',         action='store_true',    help='do not perform reverse DNS lookups')
     parser.add_argument('-B', '--bandwidth', default=default_bandwidth,         help='max egress bandwidth (default {})'.format(default_bandwidth), metavar='STR')
     parser.add_argument('-i', '--interface',                                    help='interface from which to scan (e.g. eth0)', metavar='IFC')
     parser.add_argument('-G', '--gateway-mac',                                  help='MAC address of default gateway', metavar='MAC')
