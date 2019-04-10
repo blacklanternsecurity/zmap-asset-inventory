@@ -5,9 +5,11 @@
 '''
 TODO:
     
-    add --whitelist options which overrides all other inputs
+    - whitelist doesn't work when -Pn is specified
+    - check domain when getting services
+    - make backup of nmap output before overwriting
 
-    output "{num} services found on {system}" instead of "Successful Authentication on {system}"
+    - output "{num} services found on {system}" instead of "Successful Authentication on {system}"
 '''
 
 import os
@@ -136,7 +138,7 @@ def main(options):
                 with open(options.whitelist) as f:
                     for line in f.readlines():
                         try:
-                            whitelist.append(ip_address.ip_network(line.strip()))
+                            whitelist.append(ipaddress.ip_network(line.strip()))
                         except ValueError:
                             continue
 
@@ -328,10 +330,10 @@ def combine_csv(csv_files):
                         hosts[ip] = row
                     else:
                         for k,v in row.items():
-                            if v and not v.lower() in ['unknown', 'n/a']:
+                            if v and not v.lower() in ['unknown', 'n/a', 'closed']:
                                 # skip if the cell isn't empty
                                 if k in hosts[ip]:
-                                    if hosts[ip][k] and not hosts[ip][k].lower() in ['unknown', 'n/a']:
+                                    if hosts[ip][k] and not hosts[ip][k].lower() in ['unknown', 'n/a', 'closed'`]:
                                         continue
                                 hosts[ip].update({k: v})
 

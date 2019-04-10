@@ -585,10 +585,10 @@ class Zmap:
                     #print('[!] Invalid IP address: {}'.format(str(line['IP Address'])))
                     continue
 
-                host = Host(ip=ip, hostname=line['Hostname'], resolve=self.resolve)
+                host = Host(ip=ip, hostname=line['Hostname'])
                 vulnerable_to_eb = 'N/A'
                 try:
-                    vulnerable_to_eb = line['Vulnerable to EternalBlue'].capitalize()
+                    vulnerable_to_eb = line['Vulnerable to EternalBlue']
                     if vulnerable_to_eb.lower().startswith('y'):
                         self.eternal_blue_count += 1
                 except KeyError:
