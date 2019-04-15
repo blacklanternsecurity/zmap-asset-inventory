@@ -1,5 +1,5 @@
 # zmap-asset-inventory
-Python script which takes internal asset inventory at scale using zmap.  Outputs to CSV.
+Python script which takes internal asset inventory at scale using zmap.  Outputs to a nicely-formatted CSV for delivery to the customer.
 
 
 ## Features:
@@ -9,26 +9,61 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
 * Ability to calculate delta between scan results and another list
     * Great for finding stray hosts
 * Outputs to CSV
-* Checks for EternalBlue (optional)
-* Checks for default SSH credentials (optional)
+* Can check for EternalBlue, default SSH creds, and open VNC (optional)
 * Automatic caching of scan results
     * Run additional port scans without waiting for host discovery or DNS lookups 
     * Saves lots of time if scanning > thousands of hosts
 
 
-## Workflow:
+## Typical usage scenario:
 
-**zmap ping scan &rarr; zmap port scan(s) &rarr; EternalBlue check (optional) &rarr; CSV**
+**zmap ping scan &rarr; zmap port scan(s) &rarr; Service/EternalBlue/SSH/VNC scans (optional) &rarr; CSV**
+
+1. **Host Discovery**
+  1. Ensure your /etc/hosts contains the correct DNS information for reverse lookups
+  1. Run a ping sweep (defaults to entire private IP range):
+    - `$ ./zmap_asset_inventory.py`
+  1. Tip #1: You can specify a `--blacklist`
+  1. Tip #2: All raw output is saved in `~/.asset_inventory`
+1. **Port Scans**
+  - Multiple ports can be scanned in one go:
+    - `$ ./zmap_asset_inventory.py -p 21 22 23 80 443 445`
+  - Note: Only alive hosts (discovered during the ping sweep) will be scanned unless `--skip-ping` is specified
+1. **Service Enumeration**
+  - Useful for enumerating host-based controls such as AV on Windows systems
+  - Note: Requires an account which can execute code on target systems (e.g. a Domain Admin)
+  - To enumerate services:
+    1. Edit `services.config` and ensure credentials are valid
+      - Fill out any 
+      - Note: Impacket's wmiexec is used for execution, and it must be in your path:
+        - `$ export PATH=/root/Downloads/impacket/examples:$PATH`
+      - Tip: You can pass the hash or use a golden ticket.  A password or hash is recommended; golden tickets can be a bit buggy, and only work on systems with a resolvable hostname.
+    1. Ensure credentials are valid (seriously)
+    1. Dew it.  All systems with 445 open are scanned by default:
+      - `$ ./zmap_asset_inventory.py --check-services`
+      - Tip: You can specify a whitelist 
+1. **Additional Checks**
+  - To check for EternalBlue:
+    - `$ ./zmap_asset_inventory.py --check-eternal-blue`
+  - To check for default SSH creds:
+    - `$ ./zmap_asset_inventory.py --check-default-ssh`
+  - To check for default open VNC:
+    - `$ ./zmap_asset_inventory.py --check-open-vnc`
+1. **Combine all results into deliverable CSV**
+  - `$ ./zmap_asset_inventory.py --combine`
+  - A CSV file will be created in the current directory
 
 
 ## Usage:
 ~~~
 # ./zmap_asset_inventory.py --help
-usage: zmap_asset_inventory.py [-h] [-t STR [STR ...]] [-B STR] [-i IFC]
-                               [-G MAC] [--blacklist FILE] [-w CSV_FILE] [-f]
-                               [-p PORTS [PORTS ...]] [-Pn] [-e] [-s]
-                               [--work-dir DIR] [-d FILE] [-n NETMASK] [--ssh]
+usage: zmap_asset_inventory.py [-h] [-t STR [STR ...]] [-n] [-B STR] [-i IFC]
+                               [-G MAC] [--blacklist FILE] [--whitelist FILE]
+                               [-w CSV_FILE] [-f] [-p PORTS [PORTS ...]] [-Pn]
+                               [-e] [-v] [-s] [--work-dir DIR] [-d FILE]
+                               [--netmask NETMASK] [--ssh]
                                [--ufail-limit UFAIL_LIMIT]
+                               [--combine-all-assets]
 
 Assess the security posture of an internal network
 
@@ -36,13 +71,16 @@ optional arguments:
   -h, --help            show this help message and exit
   -t STR [STR ...], --targets STR [STR ...]
                         target network(s) to scan
+  -n, --dont-resolve    do not perform reverse DNS lookups
   -B STR, --bandwidth STR
-                        max egress bandwidth (default 1M)
+                        max egress bandwidth (default 600K)
   -i IFC, --interface IFC
                         interface from which to scan (e.g. eth0)
   -G MAC, --gateway-mac MAC
                         MAC address of default gateway
   --blacklist FILE      a file containing hosts to exclude from scanning
+  --whitelist FILE      only these hosts (those which overlap with targets)
+                        will be scanned
   -w CSV_FILE, --csv-file CSV_FILE
                         output CSV file
   -f, --start-fresh     don't load results from previous scans
@@ -51,16 +89,18 @@ optional arguments:
   -Pn, --skip-ping      skip zmap host-discovery
   -e, --check-eternal-blue
                         scan for EternalBlue
+  -v, --vnc             scan for open VNC
   -s, --check-services  enumerate select services with wmiexec (see
                         services.config)
   --work-dir DIR        custom working directory
   -d FILE, --diff FILE  show differences between scan results and IPs/networks
                         from file
-  -n NETMASK, --netmask NETMASK
-                        summarize networks with this CIDR mask (default 24)
+  --netmask NETMASK     summarize networks with this CIDR mask (default 24)
   --ssh                 scan for default SSH creds (see lib/ssh_creds.txt)
   --ufail-limit UFAIL_LIMIT
                         limit consecutive wmiexec failed logins (default: 3)
+  --combine-all-assets  combine all previous results and save in current
+                        directory
 ~~~
 
 

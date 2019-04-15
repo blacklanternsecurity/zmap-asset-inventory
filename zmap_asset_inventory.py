@@ -5,9 +5,15 @@
 '''
 TODO:
     
-    - whitelist doesn't work when -Pn is specified
+    - modularize extra features like vnc, ssh, services
+        - e.g. class Module():
+            module.ports = [445]
+            module.required_progs = ['nmap']
+            module.temp_dirs = ['eternalblue']
+            module.csv_headers = ['Vulnerable to EternalBlue']
+            def module.run(targets)
+
     - check domain when getting services
-    - make backup of nmap output before overwriting
 
     - output "{num} services found on {system}" instead of "Successful Authentication on {system}"
 '''
@@ -23,10 +29,10 @@ import subprocess as sp
 from pathlib import Path
 import concurrent.futures
 from datetime import datetime
-from lib.service_enum import *
-from lib.scan import Nmap, Zmap
 from lib.host import *
 from lib.brute_ssh import *
+from lib.service_enum import *
+from lib.inventory import Inventory
 
 
 
@@ -74,6 +80,14 @@ def main(options):
         elif not 445 in options.ports:
             options.ports.append(445)
 
+    # add port 5900 if check_open_vnc is requested
+    if options.check_open_vnc:
+        if not options.ports:
+            options.ports = [5900,5902]
+        else:
+            if not 5900 in options.ports: options.ports.append(5900)
+            if not 5902 in options.ports: options.ports.append(5902)
+
 
     if options.csv_file is None:
         options.csv_file = options.work_dir / 'asset_inventory_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now() )
@@ -97,7 +111,7 @@ def main(options):
 
     else:
 
-        z = Zmap(options.targets, options.bandwidth, resolve=(not options.dont_resolve), \
+        z = Inventory(options.targets, options.bandwidth, resolve=(not options.dont_resolve), \
             work_dir=cache_dir, skip_ping=options.skip_ping, blacklist=options.blacklist, \
             whitelist=options.whitelist, interface=options.interface, \
             gateway_mac=options.gateway_mac)
@@ -107,7 +121,7 @@ def main(options):
             pass
 
         # check for default SSH creds
-        if options.ssh:
+        if options.check_default_ssh:
             try:
                 z.brute_ssh()
             except PatatorError as e:
@@ -125,6 +139,9 @@ def main(options):
         # check for EternalBlue
         if options.check_eternal_blue:
             z.check_eternal_blue()
+
+        if options.check_open_vnc:
+            z.check_open_vnc()
 
 
         # if service enumeration is enabled
@@ -229,6 +246,10 @@ def main(options):
         if options.check_eternal_blue and z.eternal_blue_count <= 0:
             print('[+] No systems found vulnerable to EternalBlue')
             print('')
+        if options.check_open_vnc and z.open_vnc_count <= 0:
+            print('[+] No systems found with open VNC')
+            print('')
+
 
         # calculate deltas if requested
         if options.diff:
@@ -333,7 +354,7 @@ def combine_csv(csv_files):
                             if v and not v.lower() in ['unknown', 'n/a', 'closed']:
                                 # skip if the cell isn't empty
                                 if k in hosts[ip]:
-                                    if hosts[ip][k] and not hosts[ip][k].lower() in ['unknown', 'n/a', 'closed'`]:
+                                    if hosts[ip][k] and not hosts[ip][k].lower() in ['unknown', 'n/a', 'closed']:
                                         continue
                                 hosts[ip].update({k: v})
 
@@ -357,11 +378,12 @@ if __name__ == '__main__':
 
     default_bandwidth = '600K'
     default_work_dir = Path.home() / '.asset_inventory'
-    default_cidr_mask = 24
+    default_cidr_mask = 16
     default_networks = [[ipaddress.ip_network(n)] for n in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']]
 
     parser = argparse.ArgumentParser(description="Assess the security posture of an internal network")
     parser.add_argument('-t', '--targets', type=str_to_network, nargs='+',      default=default_networks, help='target network(s) to scan', metavar='STR')
+    parser.add_argument('-p', '--ports', nargs='+', type=int,                   help='port-scan online hosts')
     parser.add_argument('-n', '--dont-resolve',         action='store_true',    help='do not perform reverse DNS lookups')
     parser.add_argument('-B', '--bandwidth', default=default_bandwidth,         help='max egress bandwidth (default {})'.format(default_bandwidth), metavar='STR')
     parser.add_argument('-i', '--interface',                                    help='interface from which to scan (e.g. eth0)', metavar='IFC')
@@ -369,17 +391,17 @@ if __name__ == '__main__':
     parser.add_argument('--blacklist',                                          help='a file containing hosts to exclude from scanning', metavar='FILE')
     parser.add_argument('--whitelist',                                          help='only these hosts (those which overlap with targets) will be scanned', metavar='FILE')
     parser.add_argument('-w', '--csv-file',                                     help='output CSV file', metavar='CSV_FILE')
-    parser.add_argument('-f', '--start-fresh',          action='store_true',    help='don\'t load results from previous scans')
-    parser.add_argument('-p', '--ports', nargs='+', type=int,                   help='port-scan online hosts')
-    parser.add_argument('-Pn', '--skip-ping', action='store_true',              help='skip zmap host-discovery')
-    parser.add_argument('-e', '--check-eternal-blue',   action='store_true',    help='scan for EternalBlue')
-    parser.add_argument('-s', '--check-services',       action='store_true',    help='enumerate select services with wmiexec (see services.config)')
-    parser.add_argument('--work-dir', type=Path, default=default_work_dir,      help='custom working directory', metavar='DIR')
+    parser.add_argument('-f', '--start-fresh',      action='store_true',        help='don\'t load results from previous scans')
+    parser.add_argument('-Pn', '--skip-ping',       action='store_true',        help='skip zmap host-discovery')
+    parser.add_argument('--check-eternal-blue',     action='store_true',        help='scan for EternalBlue')
+    parser.add_argument('--check-open-vnc',         action='store_true',        help='scan for open VNC')
+    parser.add_argument('--check-services',         action='store_true',        help='enumerate select services with wmiexec (see services.config)')
+    parser.add_argument('--check-default-ssh',      action='store_true',        help='scan for default SSH creds (see lib/ssh_creds.txt)')
+    parser.add_argument('--work-dir', type=Path,    default=default_work_dir,   help='custom working directory (default {})'.format(default_work_dir), metavar='DIR')
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
-    parser.add_argument('--netmask',       type=int, default=default_cidr_mask, help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
-    parser.add_argument('--ssh',                        action='store_true',    help='scan for default SSH creds (see lib/ssh_creds.txt)')
-    parser.add_argument('--ufail-limit',   type=int, default=3,                 help='limit consecutive wmiexec failed logins (default: 3)')
-    parser.add_argument('--combine-all-assets',         action='store_true',    help='combine all previous results and save in current directory')
+    parser.add_argument('--netmask',      type=int, default=default_cidr_mask,  help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
+    parser.add_argument('--ufail-limit',  type=int, default=3,                  help='limit consecutive wmiexec failed logins (default: 3)')
+    parser.add_argument('--combine-all-assets',     action='store_true',        help='combine all previous results and save in current directory')
 
     try:
 

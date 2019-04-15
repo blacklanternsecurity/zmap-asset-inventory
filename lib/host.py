@@ -49,6 +49,7 @@ class Host(dict):
             self['Hostname'] = str(hostname)
 
         self['Vulnerable to EternalBlue'] = 'N/A'
+        self['Open VNC'] = 'N/A'
         self.open_ports = set()
 
         if resolve:
