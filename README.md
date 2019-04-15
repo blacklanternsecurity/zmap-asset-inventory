@@ -20,38 +20,38 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
 **zmap ping scan &rarr; zmap port scan(s) &rarr; Service/EternalBlue/SSH/VNC scans (optional) &rarr; CSV**
 
 1. **Host Discovery**
-  1. Ensure your /etc/hosts contains the correct DNS information for reverse lookups
-  2. Run a ping sweep (defaults to entire private IP range):
-    - `$ ./zmap_asset_inventory.py`
-  3. Tip #1: You can specify a `--blacklist`
-  4. Tip #2: All raw output is saved in `~/.asset_inventory`
-2. **Port Scans**
-  - Multiple ports can be scanned in one go:
-    - `$ ./zmap_asset_inventory.py -p 21 22 23 80 443 445`
-  - Note: Only alive hosts (discovered during the ping sweep) will be scanned unless `--skip-ping` is specified
-3. **Service Enumeration**
-  - Useful for enumerating host-based controls such as AV on Windows systems
-  - Note: Requires an account which can execute code on target systems (e.g. a Domain Admin)
-  - To enumerate services:
-    1. Edit `services.config` and ensure credentials are valid
-      - Fill out any 
-      - Note: Impacket's wmiexec is used for execution, and it must be in your path:
-        - `$ export PATH=/root/Downloads/impacket/examples:$PATH`
-      - Tip: You can pass the hash or use a golden ticket.  A password or hash is recommended; golden tickets can be a bit buggy, and only work on systems with a resolvable hostname.
-    2. Ensure credentials are valid (seriously)
-    3. Dew it.  All systems with 445 open are scanned by default:
-      - `$ ./zmap_asset_inventory.py --check-services`
-      - Tip: You can specify a whitelist 
-4. **Additional Checks**
-  - To check for EternalBlue:
-    - `$ ./zmap_asset_inventory.py --check-eternal-blue`
-  - To check for default SSH creds:
-    - `$ ./zmap_asset_inventory.py --check-default-ssh`
-  - To check for default open VNC:
-    - `$ ./zmap_asset_inventory.py --check-open-vnc`
-5. **Combine all results into deliverable CSV**
-  - `$ ./zmap_asset_inventory.py --combine`
-  - A CSV file will be created in the current directory
+    1. Ensure your /etc/hosts contains the correct DNS information for reverse lookups
+    1. Run a ping sweep (defaults to entire private IP range):
+        - `$ ./zmap_asset_inventory.py`
+    1. Tip #1: You can specify a `--blacklist`
+    1. Tip #2: All raw output is saved in `~/.asset_inventory`
+1. **Port Scans**
+    - Multiple ports can be scanned in one go:
+        - `$ ./zmap_asset_inventory.py -p 21 22 23 80 443 445`
+    - Note: Only alive hosts (discovered during the ping sweep) will be scanned unless `--skip-ping` is specified
+1. **Service Enumeration**
+    - Useful for enumerating host-based controls such as AV on Windows systems
+    - Note: Requires an account which can execute code on target systems (e.g. a Domain Admin)
+    - To enumerate services:
+        1. Edit `services.config` and ensure credentials are valid
+            - Fill out any 
+            - Note: Impacket's wmiexec is used for execution, and it must be in your path:
+                - `$ export PATH=/root/Downloads/impacket/examples:$PATH`
+            - Tip: You can pass the hash or use a golden ticket.    A password or hash is recommended; golden tickets can be a bit buggy, and only work on systems with a resolvable hostname.
+        1. Ensure credentials are valid (seriously)
+        1. Dew it.    All systems with 445 open are scanned by default:
+            - `$ ./zmap_asset_inventory.py --check-services`
+            - Tip: You can specify a whitelist 
+1. **Additional Checks**
+    - To check for EternalBlue:
+        - `$ ./zmap_asset_inventory.py --check-eternal-blue`
+    - To check for default SSH creds:
+        - `$ ./zmap_asset_inventory.py --check-default-ssh`
+    - To check for default open VNC:
+        - `$ ./zmap_asset_inventory.py --check-open-vnc`
+1. **Combine all results into deliverable CSV**
+    - `$ ./zmap_asset_inventory.py --combine`
+    - A CSV file will be created in the current directory
 
 
 ## Usage:
