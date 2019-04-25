@@ -17,7 +17,7 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
 
 ## Typical usage scenario:
 
-**zmap ping scan &rarr; zmap port scan(s) &rarr; Service/EternalBlue/SSH/VNC scans (optional) &rarr; CSV**
+**zmap ping scan &rarr; zmap port scan(s) &rarr; modules (optional, e.g. EternalBlue scan) &rarr; CSV**
 
 1. **Host Discovery**
     1. Ensure your /etc/hosts contains the correct DNS information for reverse lookups
@@ -39,15 +39,15 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
             - Tip: You can pass the hash or use a golden ticket.  A password or hash is recommended; golden tickets can be a bit buggy, and only work on systems with a resolvable hostname.
         1. Ensure credentials are valid (seriously)
         1. Dew it.  All systems with 445 open are scanned by default:
-            - `$ ./asset_inventory.py --check-services`
+            - `$ ./asset_inventory.py -M enum-services`
             - Tip: You can specify a whitelist 
 1. **Additional Checks**
     - To check for EternalBlue:
-        - `$ ./asset_inventory.py --check-eternal-blue`
+        - `$ ./asset_inventory.py -M eternalblue`
     - To check for default SSH creds:
-        - `$ ./asset_inventory.py --check-default-ssh`
+        - `$ ./asset_inventory.py -M default-ssh`
     - To check for default open VNC:
-        - `$ ./asset_inventory.py --check-open-vnc`
+        - `$ ./asset_inventory.py -M open-vnc`
 1. **Combine all results into deliverable CSV**
     - `$ ./asset_inventory.py --combine`
     - A CSV file will be created in the current directory

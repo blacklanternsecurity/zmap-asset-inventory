@@ -94,7 +94,7 @@ def main(options):
 
     else:
 
-        z = Inventory(options.targets, options.bandwidth, resolve=(not options.no_dns), \
+        z = Inventory(options.targets, options.bandwidth, resolve=(not options.no_dns), force_resolve=options.force_dns, \
             work_dir=cache_dir, skip_ping=options.skip_ping, blacklist=options.blacklist, \
             whitelist=options.whitelist, interface=options.interface, \
             gateway_mac=options.gateway_mac)

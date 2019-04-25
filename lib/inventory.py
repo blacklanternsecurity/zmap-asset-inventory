@@ -517,7 +517,8 @@ class Inventory:
     def load_scan_cache(self):
 
         print('[+] Loading scan cache')
-        print('[+] NOTE: you can force DNS lookups by passing --force-dns')
+        if not self.force_resolve:
+            print('[+] NOTE: you can force DNS lookups on cached hosts with --force-dns')
 
         cached_targets = []
 
