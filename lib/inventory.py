@@ -8,20 +8,17 @@ import csv
 import sys
 import tempfile
 import ipaddress
-from lib.vnc import *
 from time import sleep
-from lib.host import *
-from lib.nmap import *
 import subprocess as sp
 from pathlib import Path
-from lib.host import Host
-from lib.brute_ssh import *
 from datetime import datetime
+
+from .host import *
 
 
 class Inventory:
 
-    def __init__(self, targets, bandwidth, work_dir, resolve=True, skip_ping=False, blacklist=None, whitelist=None, interface=None, gateway_mac=None):
+    def __init__(self, targets, bandwidth, work_dir, resolve=True, force_resolve=False, skip_ping=False, blacklist=None, whitelist=None, interface=None, gateway_mac=None):
 
         # target-specific open port counters
         # nested dictionary in format:
@@ -43,8 +40,12 @@ class Inventory:
         # { ip_address(): Host() ... }
         self.hosts                      = dict()
 
+        self.modules                    = []
+        self.active_modules             = []
+
         # whether or not to perform reverse DNS lookups
-        self.resolve = resolve
+        self.resolve                    = resolve
+        self.force_resolve              = force_resolve
 
         if interface is None:
             self.interface_arg          = []
@@ -60,11 +61,10 @@ class Inventory:
 
         self.zmap_ping_targets          = set()
         self.eternal_blue_count         = 0
-        self.open_vnc_count             = 0
         self.host_discovery_finished    = False
 
-        self.zmap_ping_file             = str(work_dir / 'zmap_ping_{date:%Y-%m-%d_%H-%M-%S}.txt'.format(date=datetime.now()))
-        self.online_hosts_file          = str(work_dir / 'zmap_all_online_hosts.txt')
+        self.zmap_ping_file             = str(work_dir / 'zmap/zmap_ping_{date:%Y-%m-%d_%H-%M-%S}.txt'.format(date=datetime.now()))
+        self.online_hosts_file          = str(work_dir / 'zmap/zmap_all_online_hosts.txt')
 
         self.skip_ping                  = skip_ping
 
@@ -72,7 +72,6 @@ class Inventory:
         self.services                   = []
 
         self.update_config(bandwidth, work_dir, blacklist, whitelist)
-        self.load_scan_cache()
 
 
     def start(self):
@@ -81,7 +80,7 @@ class Inventory:
 
             self.primary_zmap_started = True
 
-            zmap_command = ['zmap', '--blacklist-file={}'.format(self.blacklist_arg), \
+            zmap_command = ['zmap', '--cooldown-time=3', '--blacklist-file={}'.format(self.blacklist_arg), \
                 '--bandwidth={}'.format(self.bandwidth), \
                 '--probe-module=icmp_echoscan'] + self.interface_arg + \
                 self.gateway_mac_arg + self.whitelist_arg + \
@@ -133,54 +132,16 @@ class Inventory:
         return hosts_sorted
 
 
-    def check_eternal_blue(self):
+    def run_modules(self):
 
-        # nmap_input_file, new_ports_found = self.scan_online_hosts(port=445)
-
-        # make temporary input file for nmap
-        targets = 0
-        nmap_input_file = str(self.work_dir / 'nmap/nmap_eternalblue_hosts_to_scan')
-        with open(nmap_input_file, 'w') as f:
-            for host in self:
-                if 445 in host.open_ports:
-                    f.write(str(host['IP Address']) + '\n')
-                    targets += 1
-
-        if targets > 0:
-            print('\n[+] Scanning {:,} systems for EternalBlue'.format(targets))
-            for ip, vulnerable in Nmap(nmap_input_file, check='eternalblue', work_dir=self.work_dir / 'nmap'):
-                if vulnerable:
-                    self.eternal_blue_count += 1
-                    if not ip in self.hosts:
-                        self.hosts[ip] = Host(ip)
-                    self.hosts[ip]['Vulnerable to EternalBlue'] = 'Yes'
-                else:
-                    self.hosts[ip]['Vulnerable to EternalBlue'] = 'No'
-        else:
-            print('[!] No valid targets for EternalBlue scan')
+        for module in self.active_modules:
+            module.run(self)
 
 
+    def module_reports(self):
 
-    def check_open_vnc(self, ports=[5900, 5902]):
-
-        targets = []
-        for host in self:
-            for port in ports:
-                if port in host.open_ports:
-                    targets.append(ipaddress.ip_address(host.ip))
-
-        if not targets:
-            print('[!] No valid targets for VNC scan')
-            return
-
-        print('\n[+] Scanning {:,} systems for open VNC'.format(len(targets)))
-
-        for ip in targets:
-            if check_vnc(ip, self.work_dir / 'vnc', port):
-                self.hosts[ip]['Open VNC'] = 'Yes'
-            else:
-                self.hosts[ip]['Open VNC'] = 'No'
-
+        for module in self.active_modules:
+            module.report(self)
 
 
     def brute_ssh(self):
@@ -208,30 +169,14 @@ class Inventory:
         # then sort by host count
         summarized_hosts.sort(key=lambda x: x[1], reverse=True)
         for subnet in summarized_hosts:
-            print('\t{:<19}{:<10}'.format(str(subnet[0]), ' ({:,} | {:.2f}%)'.format(subnet[1], subnet[1]/len(self.hosts)*100)))
+            print('\t{:<19}{:<10}'.format(str(subnet[0]), ' ({:,} | {:.1f}%)'.format(subnet[1], subnet[1]/len(self.hosts)*100)))
 
         print('')
         open_port_counts = list(self.open_ports.items())
         open_port_counts.sort(key=lambda x: x[1], reverse=True)
         for port, open_port_count in open_port_counts:
-            print('[+] {:,} host(s) with port {} open ({:.2f}%)'.format(\
+            print('[+] {:,} host(s) with port {} open ({:.1f}%)'.format(\
                     open_port_count, port, (open_port_count / len(self.hosts) * 100)))
-
-        if self.eternal_blue_count > 0:
-            print('\n')
-            print('[+] Vulnerable to EternalBlue: {:,}\n'.format(self.eternal_blue_count))
-            for host in self.hosts.values():
-                if host['Vulnerable to EternalBlue'].lower() == 'yes':
-                    print('\t{}'.format(str(host)))
-            print('')
-
-        if self.open_vnc_count > 0:
-            print('\n')
-            print('[+] Open VNC: {:,}\n'.format(self.open_vnc_count))
-            for host in self.hosts.values():
-                if host['Open VNC'].lower() == 'yes':
-                    print('\t{}'.format(str(host)))
-            print('')
 
         print('')
 
@@ -244,7 +189,7 @@ class Inventory:
 
         port = int(port)
         zmap_out_file = self.work_dir / 'zmap/zmap_port_{}_{date:%Y-%m-%d_%H-%M-%S}.txt'.format(port, date=datetime.now())
-        zmap_whitelist_file = self.work_dir / '.zmap_tmp_whitelist_port_{}.txt'.format(port)
+        zmap_whitelist_file = self.work_dir / 'zmap/zmap_tmp_whitelist_port_{}.txt'.format(port)
         targets = [t[0] for t in self.targets.items() if port not in t[1]]
 
         # fill target-specific port counts
@@ -293,7 +238,7 @@ class Inventory:
 
         else:
 
-            zmap_command = ['zmap', '--blacklist-file={}'.format(self.blacklist_arg), \
+            zmap_command = ['zmap', '--cooldown-time=3', '--blacklist-file={}'.format(self.blacklist_arg), \
                 '--bandwidth={}'.format(self.bandwidth), '--target-port={}'.format(port)] + \
                 self.gateway_mac_arg + self.interface_arg + self.whitelist_arg + \
                 ([] if self.whitelist_arg else zmap_targets)
@@ -373,7 +318,7 @@ class Inventory:
 
         # validate blacklist arg
         if blacklist is None:
-            blacklist = work_dir / '.zmap_blacklist_tmp'
+            blacklist = work_dir / 'zmap/zmap_tmp_blacklist'
             blacklist.touch(mode=0o644, exist_ok=True)
             self.blacklist_arg = str(blacklist)
         else:
@@ -572,7 +517,7 @@ class Inventory:
     def load_scan_cache(self):
 
         print('[+] Loading scan cache')
-        print('[+] NOTE: disabling DNS lookups with "-n" will speed up this process significantly')
+        print('[+] NOTE: you can force DNS lookups by passing --force-dns')
 
         cached_targets = []
 
@@ -627,7 +572,7 @@ class Inventory:
     def read_csv(self, csv_file):
         '''
         takes name of CSV file to read
-        injests contents
+        ingests contents
         returns number of hosts therein
         '''
 
@@ -635,14 +580,12 @@ class Inventory:
         empty_file = True
         open_ports = dict()
 
-        # default CSV output
-        if csv_file is None:
-            csv_file = self.work_dir / 'state.csv'
-
         with open(str(csv_file), newline='') as f:
             c = csv.DictReader(f)
 
             for line in c:
+
+                line = dict(line)
 
                 try:
                     ip = ipaddress.ip_address(line['IP Address'])
@@ -651,24 +594,9 @@ class Inventory:
                     #print('[!] Invalid IP address: {}'.format(str(line['IP Address'])))
                     continue
 
-                host = Host(ip=ip, hostname=line['Hostname'])
-                vulnerable_to_eb = 'N/A'
-                try:
-                    vulnerable_to_eb = line['Vulnerable to EternalBlue']
-                    if vulnerable_to_eb.lower().startswith('y'):
-                        self.eternal_blue_count += 1
-                except KeyError:
-                    pass
-                host['Vulnerable to EternalBlue'] = vulnerable_to_eb
-
-                open_vnc = 'N/A'
-                try:
-                    open_vnc = line['Vulnerable to EternalBlue']
-                    if open_vnc.lower().startswith('y'):
-                        self.open_vnc_count += 1
-                except KeyError:
-                    pass
-                host['Open VNC'] = open_vnc
+                host = Host(ip=line['IP Address'], hostname=line['Hostname'], resolve=self.force_resolve)
+                for module in self.modules:
+                    module.read_host(line, host)
 
                 # if we've already seen this host, merge it
                 if ip not in self.hosts:
@@ -677,10 +605,11 @@ class Inventory:
                 else:
                     self.hosts[ip].merge(host)
 
-                for field in c.fieldnames:
-                    if field.endswith('/tcp'):
-                        port = int(field.split('/')[0])
-                        if line[field] == 'Open':
+                for key, value in line.items():
+                    value = value.strip()
+                    if key.endswith('/tcp'):
+                        port = int(key.split('/')[0])
+                        if value.lower() == 'open':
                             if not port in self.open_ports:
                                 self.open_ports[port] = 0
 
@@ -692,6 +621,12 @@ class Inventory:
                                 open_ports[port] += 1
                             except KeyError:
                                 open_ports[port] = 1
+
+                    # all other values are loaded here, to preserve module output between executions
+                    # even if the module is not loaded
+                    # currently, a module's read_host() method is not needed
+                    #elif value:
+                    #    host.update({key: value})
 
 
         return (empty_file, open_ports)
@@ -710,8 +645,15 @@ class Inventory:
             csv_file = self.work_dir / 'asset_inventory.csv'
 
         f = open(csv_file, 'w', newline='')
-        csv_writer = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname', 'Vulnerable to EternalBlue', 'Open VNC'] + \
-            ['{}/tcp'.format(port) for port in self.open_ports] + self.services, extrasaction='ignore')
+
+        # build CSV headers
+        fieldnames = ['IP Address', 'Hostname']
+        for m in self.modules:
+            fieldnames += m.csv_headers
+        fieldnames += ['{}/tcp'.format(port) for port in self.open_ports]
+        fieldnames += self.services
+
+        csv_writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
         csv_writer.writeheader()
 
         return (csv_writer, f)
@@ -807,7 +749,7 @@ class Inventory:
         if type(host) == str:
             host = ipaddress.ip_address(host)
         elif type(host) == Host:
-            host = ipaddress.ip_address(host.ip)
+            host = host.ip
 
         if not any([host in network for network in self.blacklist]):
             if not self.whitelist or any([host in network for network in self.whitelist]):

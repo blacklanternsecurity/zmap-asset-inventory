@@ -21,18 +21,26 @@ TODO:
 import os
 import csv
 import sys
-import queue
-import random
+import string
 import argparse
+import importlib
 import ipaddress
-import subprocess as sp
 from pathlib import Path
-import concurrent.futures
 from datetime import datetime
 from lib.host import *
-from lib.brute_ssh import *
-from lib.service_enum import *
 from lib.inventory import Inventory
+
+
+# detect .py modules in lib/modules
+detected_modules = []
+
+script_location = Path(__file__).resolve().parent
+module_candidates = next(os.walk(script_location / 'lib/modules'))[2]
+
+for file in module_candidates:
+    file = Path(file)
+    if file.suffix == ('.py') and file.stem not in ['__init__', 'base_module']:
+        detected_modules.append(str(file.stem))
 
 
 
@@ -48,14 +56,9 @@ def main(options):
     if options.whitelist:
         assert Path(options.whitelist).resolve().is_file(), 'Problem reading whitelist file "{}"'.format(str(options.whitelist))
 
-    # resolve symlinks
+    # create working directory
     options.work_dir = options.work_dir.resolve()
-
     cache_dir = options.work_dir / 'cache'
-    nmap_dir = cache_dir / 'nmap'
-    zmap_dir = cache_dir / 'zmap'
-    temp_dir = options.work_dir / 'tmp'
-    patator_dir = cache_dir / 'patator'
 
     # if starting fresh, rename working directory to ".bak"
     if options.start_fresh:
@@ -67,27 +70,7 @@ def main(options):
         except FileNotFoundError:
             pass
 
-    # create directories if they don't exist
-    nmap_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
-    zmap_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
-    temp_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
-    patator_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
-
-    # add port 445 if check_services is requested
-    if options.check_services or options.check_eternal_blue:
-        if not options.ports:
-            options.ports = [445]
-        elif not 445 in options.ports:
-            options.ports.append(445)
-
-    # add port 5900 if check_open_vnc is requested
-    if options.check_open_vnc:
-        if not options.ports:
-            options.ports = [5900,5902]
-        else:
-            if not 5900 in options.ports: options.ports.append(5900)
-            if not 5902 in options.ports: options.ports.append(5902)
-
+    (cache_dir / 'zmap').mkdir(mode=0o755, parents=True, exist_ok=True)
 
     if options.csv_file is None:
         options.csv_file = options.work_dir / 'asset_inventory_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now() )
@@ -111,145 +94,95 @@ def main(options):
 
     else:
 
-        z = Inventory(options.targets, options.bandwidth, resolve=(not options.dont_resolve), \
+        z = Inventory(options.targets, options.bandwidth, resolve=(not options.no_dns), \
             work_dir=cache_dir, skip_ping=options.skip_ping, blacklist=options.blacklist, \
             whitelist=options.whitelist, interface=options.interface, \
             gateway_mac=options.gateway_mac)
+
+        def load_module(m, active=False):
+            z.modules.append(m)
+            if active:
+                z.active_modules.append(m)
+                try:
+                    options.ports += m.required_ports
+                except TypeError:
+                    options.ports = m.required_ports
+
+        for module in detected_modules:
+            module_name = 'lib.modules.{}'.format(module)
+            try:
+                #_m = importlib.import_module(module_name, package=__package__)
+                _m = importlib.import_module(module_name)
+                m = _m.Module(z)
+                load_module(m, active=(module in options.modules))
+            except ImportError as e:
+                sys.stderr.write('[!] Error importing {}:\n{}\n'.format(module_name, str(e)))
+                continue
+
+        # load modules
+        #modules_to_load = []
+        #if options.check_eternal_blue:
+        #    eb = EternalBlue(z)
+        #    load_module(eb)
+        # if options.check_default_ssh:
+        #     ssh = BruteSSH()
+        #     load_module(ssh)
+        #if options.check_open_vnc:
+        #     vnc = CheckOpenVNC(z)
+        #     load_module(vnc)
+        #if options.check_services:
+        #    try:
+        #        service_enum = EnumServices(z, ufail_limit=options.ufail_limit)
+        #        load_module(service_enum)
+        #    except ValueError as e:
+        #        sys.stderr.write('[!] {}\n'.format(str(e)))
+
+
+        # load cached hosts
+        z.load_scan_cache()
+
 
         # do host discovery
         for host in z:
             pass
 
         # check for default SSH creds
-        if options.check_default_ssh:
-            try:
-                z.brute_ssh()
-            except PatatorError as e:
-                sys.stderr.write('\n[!] {}\n'.format(str(e)))
+        # if options.check_default_ssh:
+        #     try:
+        #         z.brute_ssh()
+        #     except PatatorError as e:
+        #         sys.stderr.write('\n[!] {}\n'.format(str(e)))
 
         # scan additional ports if requested
         # only alive hosts are scanned
         if options.ports:
+
+            # deduplicate ports
+            options.ports = list(set(options.ports))
+
+            # always scan 445 first so AV will have less of a chance to block us
+            if 445 in options.ports:
+                options.ports.remove(445)
+                options.ports = [445] + options.ports
+
             for port in options.ports:
                 zmap_out_file, new_hosts_found = z.scan_online_hosts(port)
                 if new_hosts_found:
                     print('\n[+] Port scan results for {}/TCP written to {}'.format(port, zmap_out_file))
 
 
-        # check for EternalBlue
-        if options.check_eternal_blue:
-            z.check_eternal_blue()
+        # run modules
+        z.run_modules()
 
-        if options.check_open_vnc:
-            z.check_open_vnc()
-
-
-        # if service enumeration is enabled
-        # run wmiexec
-        if options.check_services:
-            print('[+] Retrieving service information for Windows hosts')
-
-            # generate whitelist
-            whitelist = []
-            if options.whitelist is not None:
-                with open(options.whitelist) as f:
-                    for line in f.readlines():
-                        try:
-                            whitelist.append(ipaddress.ip_network(line.strip()))
-                        except ValueError:
-                            continue
-
-            lockout_queue = queue.Queue()
-            lockout_counter = 0
-
-            wmiexec_output = dict()
-            config = parse_service_config('services.config')
-
-            # parse services.config
-            try:
-                if config is None:
-                    print('[!] Error with config')
-                else:
-                    z.services = list(config['SERVICES'].keys())
-                    if z.services:
-                        z.services = ['OS'] + z.services
-                        # set up threading
-                        wmi_futures = []
-                        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as wmi_executor:
-                            shuffled_hosts = random.sample(list(z.hosts.values()), len(z.hosts))
-                            for host in shuffled_hosts:
-                                if 445 in host.open_ports:
-                                    if whitelist:
-                                        # make sure host is in whitelist
-                                        host_ip = ipaddress.ip_address(host.ip)
-                                        if not any([host_ip in entry for entry in whitelist]):
-                                            continue
-
-                                    try:
-                                        # this is terrible
-                                        # fix so that lockout_queue entries specify the host
-                                        while 1:
-                                            failed_login = lockout_queue.get_nowait()
-                                            if failed_login == 1:
-                                                lockout_counter += 1
-                                                #print('[!] LOGON FAILURE ON {}'.format(str(host)))
-                                            else:
-                                                print('[+] Successful authentication on {}'.format(str(host)))
-                                                lockout_counter = 0
-
-                                    except queue.Empty:
-                                        pass
-
-                                    assert lockout_counter < options.ufail_limit
-                                    wmi_futures.append(wmi_executor.submit(host.get_services, config, lockout_queue))
-                                    sleep(.75)
-                                    #host.get_services(config)
-
-                            wmi_executor.shutdown(wait=True)
-
-                        for host in z:
-                            if host.raw_wmiexec_output:
-                                wmiexec_output[host['IP Address']] = host.raw_wmiexec_output
-
-                        #for f in wmi_futures:
-                        #    print(f.result())
-
-                    else:
-                        print('[!] No services specified')
-
-            except AssertionError:
-                print('[!] Logon failure limit reached ({limit}/{limit})'.format(limit=options.ufail_limit))
-            finally:
-                try:
-                    raw_output_file = str(cache_dir / 'raw_wmiexec_output_{date:%Y-%m-%d_%H-%M-%S}.txt'.format( date=datetime.now() ))
-                    print('[+] Writing raw command output to {}'.format(raw_output_file))
-                    with open(raw_output_file, 'w') as f:
-                        for ip, output in wmiexec_output.items():
-                            f.write('=' * 10 + '\n')
-                            f.write(str(ip) + '\n')
-                            f.write('=' * 5 + '\n')
-                            f.write(str(output) + '\n')
-                except:
-                    pass
-                try:
-                    print('=' * 60)
-                    print(wmiexec.report(config, z.hosts_sorted()))
-                    print('=' * 60)
-                except:
-                    pass
 
         # write CSV file
         z.write_csv(csv_file=options.csv_file)
 
         # print summary
         z.report(netmask=options.netmask)
-        if options.check_eternal_blue and z.eternal_blue_count <= 0:
-            print('[+] No systems found vulnerable to EternalBlue')
-            print('')
-        if options.check_open_vnc and z.open_vnc_count <= 0:
-            print('[+] No systems found with open VNC')
-            print('')
 
+        # print module reports
+        z.module_reports()
 
         # calculate deltas if requested
         if options.diff:
@@ -376,15 +309,18 @@ def combine_csv(csv_files):
 
 if __name__ == '__main__':
 
-    default_bandwidth = '600K'
+    default_bandwidth = '500K'
     default_work_dir = Path.home() / '.asset_inventory'
     default_cidr_mask = 16
     default_networks = [[ipaddress.ip_network(n)] for n in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']]
 
+    # modules = ['eternalblue', 'open-vnc', 'default-ssh', 'enum-services']
+
     parser = argparse.ArgumentParser(description="Assess the security posture of an internal network")
     parser.add_argument('-t', '--targets', type=str_to_network, nargs='+',      default=default_networks, help='target network(s) to scan', metavar='STR')
     parser.add_argument('-p', '--ports', nargs='+', type=int,                   help='port-scan online hosts')
-    parser.add_argument('-n', '--dont-resolve',         action='store_true',    help='do not perform reverse DNS lookups')
+    parser.add_argument('-n', '--no-dns',           action='store_true',        help='do not perform reverse DNS lookups')
+    parser.add_argument('--force-dns',              action='store_true',        help='force dns lookups while loading cache')
     parser.add_argument('-B', '--bandwidth', default=default_bandwidth,         help='max egress bandwidth (default {})'.format(default_bandwidth), metavar='STR')
     parser.add_argument('-i', '--interface',                                    help='interface from which to scan (e.g. eth0)', metavar='IFC')
     parser.add_argument('-G', '--gateway-mac',                                  help='MAC address of default gateway', metavar='MAC')
@@ -393,14 +329,14 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--csv-file',                                     help='output CSV file', metavar='CSV_FILE')
     parser.add_argument('-f', '--start-fresh',      action='store_true',        help='don\'t load results from previous scans')
     parser.add_argument('-Pn', '--skip-ping',       action='store_true',        help='skip zmap host-discovery')
-    parser.add_argument('--check-eternal-blue',     action='store_true',        help='scan for EternalBlue')
-    parser.add_argument('--check-open-vnc',         action='store_true',        help='scan for open VNC')
-    parser.add_argument('--check-services',         action='store_true',        help='enumerate select services with wmiexec (see services.config)')
-    parser.add_argument('--check-default-ssh',      action='store_true',        help='scan for default SSH creds (see lib/ssh_creds.txt)')
+    parser.add_argument('-M', '--modules', nargs='*',   default=[],             help='Module for additional checks such as EternalBlue (pick from {})'.format(', '.join(detected_modules + ['all', '*'])))
+    #parser.add_argument('--check-eternal-blue',     action='store_true',        help='scan for EternalBlue')
+    #parser.add_argument('--check-open-vnc',         action='store_true',        help='scan for open VNC')
+    #parser.add_argument('--check-services',         action='store_true',        help='enumerate select services with wmiexec (see services.config)')
+    #parser.add_argument('--check-default-ssh',      action='store_true',        help='scan for default SSH creds (see lib/modules/ssh_creds.txt)')
     parser.add_argument('--work-dir', type=Path,    default=default_work_dir,   help='custom working directory (default {})'.format(default_work_dir), metavar='DIR')
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
     parser.add_argument('--netmask',      type=int, default=default_cidr_mask,  help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
-    parser.add_argument('--ufail-limit',  type=int, default=3,                  help='limit consecutive wmiexec failed logins (default: 3)')
     parser.add_argument('--combine-all-assets',     action='store_true',        help='combine all previous results and save in current directory')
 
     try:
@@ -411,7 +347,14 @@ if __name__ == '__main__':
             sys.stderr.write('\n[!] No valid targets\n')
             sys.exit(1)
 
-        assert 0 <= options.netmask <= 32, "Invalid netmask"
+        assert 0 <= options.netmask <= 32, 'Invalid netmask'
+
+        valid_module_chars = string.ascii_lowercase + '-'
+        options.modules = [''.join([c for c in module.lower() if c in valid_module_chars]) for module in options.modules]
+        if any([x in options.modules for x in ['all', '*']]):
+            options.modules = detected_modules
+        elif not all([module in detected_modules for module in options.modules]):
+            raise AssertionError('Invalid module name, please pick from the following: {}'.format(', '.join(detected_modules)))
 
         main(options)
 

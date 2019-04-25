@@ -4,7 +4,6 @@
 
 import socket
 import ipaddress
-from lib.service_enum import *
 
 
 def str_to_network(s):
@@ -71,48 +70,18 @@ class Host(dict):
 
     def merge(self, other):
 
-        hostname = self['Hostname']
-        self.update(other)
-
-        if hostname and not self['Hostname']:
-            self['Hostname'] = hostname
-
-
-    def get_services(self, config, lockout_queue):
-
-        w = wmiexec(self, config)
-        try:
-            result = w.get_services()
-        except ServiceEnumException as e:
-            print('[!] Error getting services from {}'.format(str(self)))
-            print(str(e))
-            return
-        except LogonFailureException as e:
-            print('[!] LOGIN FAILURE ON {}'.format(str(self)))
-            print(str(e))
-            lockout_queue.put(1)
-            return
-
-        if result:
-            os_name, services_detected = result
-
-            self['OS'] = os_name
-
-            for fname,sname in services_detected.items():
-                self[fname] = sname
-
-            lockout_queue.put(0)
-
-            self.raw_wmiexec_output = w.raw_stdout + w.raw_stderr
-
-        else:
-            print('[!] No output returned from service enumeration of {}'.format(str(self)))
+        for key, value in other.items():
+            if value.strip().lower() not in ['n/a', 'no', 'unknown', '']:
+                self.update({key: value})
 
 
     @property
     def ip(self):
 
-        return self['IP Address']
+        try:
+            return ipaddress.ip_address(self['IP Address'])
+        except ValueError:
+            return None
 
 
     @property
