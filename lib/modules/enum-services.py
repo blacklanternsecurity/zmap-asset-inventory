@@ -52,7 +52,7 @@ class Module(BaseModule):
 
     def run(self, inventory):
 
-        print('\n[+] Retrieving service information for Windows hosts')
+        self.check_progs()
 
         try:
             # set up threading
@@ -60,18 +60,24 @@ class Module(BaseModule):
             with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
 
                 hosts_to_scan = list([h for h in inventory if 445 in h.open_ports])
-                # shuffle hosts
-                hosts_to_scan = random.sample(hosts_to_scan, len(hosts_to_scan))
 
-                for host in hosts_to_scan:
-                    assert self.lockout_counter < self.ufail_limit
-                    futures.append(executor.submit(self.get_services, host))
-                    sleep(.75)
+                if not hosts_to_scan:
+                    print('\n[+] No valid targets for service enumeration')
 
-                executor.shutdown(wait=True)
+                else:
+                    print('\n[+] Retrieving service information for Windows hosts')
+                    # shuffle hosts
+                    hosts_to_scan = random.sample(hosts_to_scan, len(hosts_to_scan))
 
-            for ip, services in self.services.items():
-                inventory.hosts[ip].update(services)
+                    for host in hosts_to_scan:
+                        assert self.lockout_counter < self.ufail_limit
+                        futures.append(executor.submit(self.get_services, host))
+                        sleep(.75)
+
+                    executor.shutdown(wait=True)
+
+                    for ip, services in self.services.items():
+                        inventory.hosts[ip].update(services)
 
 
         except AssertionError:
@@ -79,23 +85,17 @@ class Module(BaseModule):
 
         finally:
             try:
-                print('[+] Writing raw command output to {}'.format(self.raw_output_file))
-                with open(self.raw_output_file, 'w') as f:
-                    for ip, output in self.raw_wmiexec_output.items():
-                        f.write('=' * 10 + '\n')
-                        f.write(str(ip) + '\n')
-                        f.write('=' * 5 + '\n')
-                        f.write(str(output) + '\n')
-                        f.write('==' + '\n')
+                if hosts_to_scan:
+                    print('[+] Writing raw command output to {}'.format(self.raw_output_file))
+                    with open(self.raw_output_file, 'w') as f:
+                        for ip, output in self.raw_wmiexec_output.items():
+                            f.write('=' * 10 + '\n')
+                            f.write(str(ip) + '\n')
+                            f.write('=' * 5 + '\n')
+                            f.write(str(output) + '\n')
+                            f.write('==' + '\n')
             except:
                 pass
-            try:
-                print('=' * 60)
-                print(wmiexec.report(config, z.hosts_sorted()))
-                print('=' * 60)
-            except:
-                pass
-
 
 
     def get_services(self, host):
@@ -187,54 +187,56 @@ class Module(BaseModule):
             except KeyError as e:
                 continue
 
-        report = []
+        if hosts_total > 0:
 
-        report.append('SERVICES:')
+            report = []
 
-        service_stats = list(service_stats.items())
-        service_stats.sort(key=lambda x: x[1], reverse=True)
+            report.append('SERVICES:')
 
-        service_stats_servers = list(service_stats_servers.items())
-        service_stats_servers.sort(key=lambda x: x[1], reverse=True)
+            service_stats = list(service_stats.items())
+            service_stats.sort(key=lambda x: x[1], reverse=True)
 
-        service_stats_workstations = list(service_stats_workstations.items())
-        service_stats_workstations.sort(key=lambda x: x[1], reverse=True)
+            service_stats_servers = list(service_stats_servers.items())
+            service_stats_servers.sort(key=lambda x: x[1], reverse=True)
 
-        def divide(a, b):
-            try:
-                return a / b
-            except ZeroDivisionError:
-                return 0
+            service_stats_workstations = list(service_stats_workstations.items())
+            service_stats_workstations.sort(key=lambda x: x[1], reverse=True)
 
-        report.append('\tGlobal:')
-        for service, count in service_stats:
-            report.append('\t\t{}: {:,}/{:,} ({:.1f}%)'.format(service, count, hosts_total, divide(count, hosts_total)*100))
-        for service_name in service_names:
-            if service_name[0] not in [s[0] for s in service_stats]:
-                report.append('\t\t{}: 0/{} (0.0%)'.format(service_name[0], hosts_total))
+            def divide(a, b):
+                try:
+                    return a / b
+                except ZeroDivisionError:
+                    return 0
 
-        report.append('\tWorkstations:')
-        for service, count in service_stats_workstations:
-            report.append('\t\t{}: {:,}/{:,} ({:.1f}%)'.format(service, count, workstations_total, divide(count, workstations_total)*100))
-        for service_name in service_names:
-            if service_name[0] not in [s[0] for s in service_stats_workstations]:
-                report.append('\t\t{}: 0/{} (0.0%)'.format(service_name[0], workstations_total))
+            report.append('\tGlobal:')
+            for service, count in service_stats:
+                report.append('\t\t{}: {:,}/{:,} ({:.1f}%)'.format(service, count, hosts_total, divide(count, hosts_total)*100))
+            for service_name in service_names:
+                if service_name[0] not in [s[0] for s in service_stats]:
+                    report.append('\t\t{}: 0/{} (0.0%)'.format(service_name[0], hosts_total))
 
-        report.append('\tServers:')
-        for service, count in service_stats_servers:
-            report.append('\t\t{}: {:,}/{:,} ({:.1f}%)'.format(service, count, servers_total, divide(count, servers_total)*100))
-        for service_name in service_names:
-            if service_name[0] not in [s[0] for s in service_stats_servers]:
-                report.append('\t\t{}: 0/{} (0.0%)'.format(service_name[0], servers_total))
+            report.append('\tWorkstations:')
+            for service, count in service_stats_workstations:
+                report.append('\t\t{}: {:,}/{:,} ({:.1f}%)'.format(service, count, workstations_total, divide(count, workstations_total)*100))
+            for service_name in service_names:
+                if service_name[0] not in [s[0] for s in service_stats_workstations]:
+                    report.append('\t\t{}: 0/{} (0.0%)'.format(service_name[0], workstations_total))
 
-        report.append('\nOPERATING SYSTEMS:')
-        os_stats = list(os_stats.items())
-        os_stats.sort(key=lambda x: x[1], reverse=True)
-        for os, count in os_stats:
-            report.append('\t{}: {:,}/{:,} ({:.1f}%)'.format(os, count, hosts_total, divide(count, hosts_total)*100))
+            report.append('\tServers:')
+            for service, count in service_stats_servers:
+                report.append('\t\t{}: {:,}/{:,} ({:.1f}%)'.format(service, count, servers_total, divide(count, servers_total)*100))
+            for service_name in service_names:
+                if service_name[0] not in [s[0] for s in service_stats_servers]:
+                    report.append('\t\t{}: 0/{} (0.0%)'.format(service_name[0], servers_total))
 
-        print('\n'.join(report))
-        print('')
+            report.append('\nOPERATING SYSTEMS:')
+            os_stats = list(os_stats.items())
+            os_stats.sort(key=lambda x: x[1], reverse=True)
+            for os, count in os_stats:
+                report.append('\t{}: {:,}/{:,} ({:.1f}%)'.format(os, count, hosts_total, divide(count, hosts_total)*100))
+
+            print('\n'.join(report))
+            print('')
 
 
 

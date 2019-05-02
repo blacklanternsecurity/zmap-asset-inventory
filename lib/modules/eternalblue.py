@@ -11,7 +11,7 @@ import xml.etree.cElementTree as xml # for parsing Nmap output
 
 class Module(BaseModule):
 
-    work_dir_name   = 'check_eternalblue'
+    work_dir_name   = 'eternalblue'
     csv_headers     = ['Vulnerable to EternalBlue']
     required_ports  = [445]
     required_progs  = ['nmap']
@@ -26,6 +26,8 @@ class Module(BaseModule):
 
 
     def run(self, inventory):
+
+        self.check_progs()
 
         targets = 0
         with open(self.targets_file, mode='w') as f:
@@ -42,7 +44,7 @@ class Module(BaseModule):
                     f.write(str(ip) + '\n')
 
         if targets <= 0:
-            print('[!] No valid targets for EternalBlue scan')
+            print('\n[!] No valid targets for EternalBlue scan')
 
         else:
 
@@ -55,7 +57,7 @@ class Module(BaseModule):
             try:
                 self.process = sp.run(command, check=True)
             except sp.CalledProcessError as e:
-                sys.stderr.write('[!] Error launching Nmap: {}\n'.format(str(e)))
+                sys.stderr.write('[!] Error launching EternalBlue Nmap: {}\n'.format(str(e)))
                 sys.exit(1)
 
             print('\n[+] Finished EternalBlue Nmap scan')
@@ -86,7 +88,7 @@ class Module(BaseModule):
                                 else:
                                     inventory.hosts[ip].update({'Vulnerable to EternalBlue': 'No'})
 
-            print('[+] Saved Nmap results to {}.*'.format(self.output_file))
+            print('[+] Saved Nmap EternalBlue results to {}.*'.format(self.output_file))
 
 
     def report(self, inventory):

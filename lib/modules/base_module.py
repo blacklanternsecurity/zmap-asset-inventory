@@ -18,11 +18,16 @@ class BaseModule():
         self.work_dir = inventory.work_dir / 'modules' / self.work_dir_name
         self.work_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
+
+    def check_progs(self):
+
         for prog in self.required_progs:
             assert which(prog), 'Please ensure {} is installed and in $PATH'.format(prog)
 
 
     def run(self, inventory):
+
+        self.check_progs()
 
         for host in inventory:
             if 22 in host.open_ports:

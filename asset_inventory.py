@@ -314,8 +314,6 @@ if __name__ == '__main__':
     default_cidr_mask = 16
     default_networks = [[ipaddress.ip_network(n)] for n in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']]
 
-    # modules = ['eternalblue', 'open-vnc', 'default-ssh', 'enum-services']
-
     parser = argparse.ArgumentParser(description="Assess the security posture of an internal network")
     parser.add_argument('-t', '--targets', type=str_to_network, nargs='+',      default=default_networks, help='target network(s) to scan', metavar='STR')
     parser.add_argument('-p', '--ports', nargs='+', type=int,                   help='port-scan online hosts')
@@ -330,10 +328,6 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--start-fresh',      action='store_true',        help='don\'t load results from previous scans')
     parser.add_argument('-Pn', '--skip-ping',       action='store_true',        help='skip zmap host-discovery')
     parser.add_argument('-M', '--modules', nargs='*',   default=[],             help='Module for additional checks such as EternalBlue (pick from {})'.format(', '.join(detected_modules + ['all', '*'])))
-    #parser.add_argument('--check-eternal-blue',     action='store_true',        help='scan for EternalBlue')
-    #parser.add_argument('--check-open-vnc',         action='store_true',        help='scan for open VNC')
-    #parser.add_argument('--check-services',         action='store_true',        help='enumerate select services with wmiexec (see services.config)')
-    #parser.add_argument('--check-default-ssh',      action='store_true',        help='scan for default SSH creds (see lib/modules/ssh_creds.txt)')
     parser.add_argument('--work-dir', type=Path,    default=default_work_dir,   help='custom working directory (default {})'.format(default_work_dir), metavar='DIR')
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
     parser.add_argument('--netmask',      type=int, default=default_cidr_mask,  help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))

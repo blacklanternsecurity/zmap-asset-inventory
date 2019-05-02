@@ -26,6 +26,8 @@ class Module(BaseModule):
 
     def run(self, inventory):
 
+        self.check_progs()
+
         # run nmap, once for each required port
 
         # {ip: [ports, with, open, vnc]}
@@ -42,7 +44,7 @@ class Module(BaseModule):
                 for host in inventory:
                     if port in host.open_ports:
                         try:
-                            if host['Open VNC'].lower().startswith('y'):
+                            if host['Open VNC'].lower() in ['yes', 'no']:
                                 continue
                         except KeyError:
                             pass
@@ -95,7 +97,7 @@ class Module(BaseModule):
                                             except KeyError:
                                                 vulnerable_hosts[ip] = {port,}
 
-                print('[+] Saved Nmap results to {}.*'.format(output_file))
+                print('[+] Saved Nmap VNC results to {}.*'.format(output_file))
 
 
         if vulnerable_hosts:
