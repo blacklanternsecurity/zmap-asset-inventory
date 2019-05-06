@@ -27,7 +27,7 @@ class LogonFailureException(Exception):
 
 class Module(BaseModule):
 
-    work_dir_name   = 'enum_services'
+    name            = 'enum_services'
     csv_headers     = []
     required_ports  = [445]
     required_progs  = ['wmiexec.py']
@@ -51,8 +51,6 @@ class Module(BaseModule):
 
 
     def run(self, inventory):
-
-        self.check_progs()
 
         try:
             # set up threading

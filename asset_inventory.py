@@ -70,7 +70,8 @@ def main(options):
         except FileNotFoundError:
             pass
 
-    (cache_dir / 'zmap').mkdir(mode=0o755, parents=True, exist_ok=True)
+    zmap_dir = cache_dir / 'zmap'
+    zmap_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
     if options.csv_file is None:
         options.csv_file = options.work_dir / 'asset_inventory_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now() )
@@ -95,7 +96,7 @@ def main(options):
     else:
 
         z = Inventory(options.targets, options.bandwidth, resolve=(not options.no_dns), force_resolve=options.force_dns, \
-            work_dir=cache_dir, skip_ping=options.skip_ping, blacklist=options.blacklist, \
+            work_dir=cache_dir, skip_ping=options.skip_ping, force_ping=options.force_ping, blacklist=options.blacklist, \
             whitelist=options.whitelist, interface=options.interface, \
             gateway_mac=options.gateway_mac)
 
@@ -327,6 +328,7 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--csv-file',                                     help='output CSV file', metavar='CSV_FILE')
     parser.add_argument('-f', '--start-fresh',      action='store_true',        help='don\'t load results from previous scans')
     parser.add_argument('-Pn', '--skip-ping',       action='store_true',        help='skip zmap host-discovery')
+    parser.add_argument('--force-ping',             action='store_true',        help='force a new zmap ping sweep')
     parser.add_argument('-M', '--modules', nargs='*',   default=[],             help='Module for additional checks such as EternalBlue (pick from {})'.format(', '.join(detected_modules + ['all', '*'])))
     parser.add_argument('--work-dir', type=Path,    default=default_work_dir,   help='custom working directory (default {})'.format(default_work_dir), metavar='DIR')
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
@@ -337,9 +339,13 @@ if __name__ == '__main__':
 
         options = parser.parse_args()
         options.targets = parse_target_args(options.targets)
-        if not options.targets:
-            sys.stderr.write('\n[!] No valid targets\n')
-            sys.exit(1)
+
+        # make sure we have valid targets
+        assert options.targets, 'No valid targets'
+        # make sure ports are specified if there's no ping sweep
+        assert not (options.skip_ping and not options.ports), 'Please specify port(s) to scan with -p'
+        # make sure there's no conflicting options
+        assert not (options.skip_ping and options.force_ping), 'Conflicting options: --force-ping and --skip-ping'
 
         assert 0 <= options.netmask <= 32, 'Invalid netmask'
 
@@ -354,7 +360,7 @@ if __name__ == '__main__':
 
 
     except (argparse.ArgumentError, AssertionError) as e:
-        sys.stderr.write('\n[!] {}\n'.format(str(e)))
+        sys.stderr.write('\n[!] {}\n\n'.format(str(e)))
         sys.exit(2)
 
     except KeyboardInterrupt:

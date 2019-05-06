@@ -14,7 +14,7 @@ import xml.etree.cElementTree as xml # for parsing Nmap output
 
 class Module(BaseModule):
 
-    work_dir_name   = 'open-shares'
+    name            = 'open-shares'
     csv_headers     = ['Open FTP', 'Open SMB', 'Open NFS']
     required_ports  = [21,111,139,445,9100]
     required_progs  = ['nmap']
@@ -26,8 +26,6 @@ class Module(BaseModule):
 
 
     def run(self, inventory):
-
-        self.check_progs()
 
         '''
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -298,20 +296,23 @@ class Module(BaseModule):
 
     def read_host(self, csv_line, host):
 
+        vulnerable = 'N/A'
         try:
-            vulnerable = csv_line['Open SMB']
+            vulnerable = csv_line['Open SMB'].strip()
         except KeyError:
-            vulnerable = 'N/A'
+            pass
         host.update({'Open SMB': vulnerable})
 
+        vulnerable = 'N/A'
         try:
-            vulnerable = csv_line['Open FTP']
+            vulnerable = csv_line['Open FTP'].strip()
         except KeyError:
-            vulnerable = 'N/A'
+            pass
         host.update({'Open FTP': vulnerable})
 
+        vulnerable = 'N/A'
         try:
-            vulnerable = csv_line['Open NFS']
+            vulnerable = csv_line['Open NFS'].strip()
         except KeyError:
-            vulnerable = 'N/A'
+            pass
         host.update({'Open NFS': vulnerable})

@@ -14,7 +14,7 @@ import xml.etree.cElementTree as xml # for parsing Nmap output
 
 class Module(BaseModule):
 
-    work_dir_name   = 'check_open_vnc'
+    name            = 'check_open_vnc'
     csv_headers     = ['Open VNC']
     required_ports  = [5900, 5902]
     required_progs  = ['nmap', 'vncsnapshot']
@@ -25,8 +25,6 @@ class Module(BaseModule):
 
 
     def run(self, inventory):
-
-        self.check_progs()
 
         # run nmap, once for each required port
 
@@ -144,9 +142,12 @@ class Module(BaseModule):
 
     def read_host(self, csv_line, host):
 
+        vulnerable = 'N/A'
         try:
-            vulnerable = csv_line['Open VNC']
+            c = csv_line['Open VNC'].strip()
+            if c:
+                vulnerable = c
         except KeyError:
-            vulnerable = 'N/A'
+            pass
 
         host.update({'Open VNC': vulnerable})

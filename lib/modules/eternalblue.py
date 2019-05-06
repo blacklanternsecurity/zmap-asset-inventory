@@ -11,7 +11,7 @@ import xml.etree.cElementTree as xml # for parsing Nmap output
 
 class Module(BaseModule):
 
-    work_dir_name   = 'eternalblue'
+    name            = 'eternalblue'
     csv_headers     = ['Vulnerable to EternalBlue']
     required_ports  = [445]
     required_progs  = ['nmap']
@@ -26,8 +26,6 @@ class Module(BaseModule):
 
 
     def run(self, inventory):
-
-        self.check_progs()
 
         targets = 0
         with open(self.targets_file, mode='w') as f:

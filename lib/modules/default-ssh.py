@@ -14,7 +14,7 @@ patator_default_work_dir = (Path.home() / '.asset_inventory/cache/patator').reso
 
 class Module(BaseModule):
 
-    work_dir_name   = 'default_ssh'
+    name            = 'default_ssh'
     csv_headers     = ['Default SSH Login']
     required_ports  = [22]
     required_progs  = ['patator']
@@ -47,8 +47,6 @@ class Module(BaseModule):
 
 
     def run(self, inventory):
-
-        self.check_progs()
 
         # write targets to file
         with open(self.targets_file, 'w') as f:

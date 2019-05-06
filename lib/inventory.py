@@ -10,6 +10,7 @@ import tempfile
 import ipaddress
 from time import sleep
 import subprocess as sp
+from shutil import which
 from pathlib import Path
 from datetime import datetime
 
@@ -18,7 +19,7 @@ from .host import *
 
 class Inventory:
 
-    def __init__(self, targets, bandwidth, work_dir, resolve=True, force_resolve=False, skip_ping=False, blacklist=None, whitelist=None, interface=None, gateway_mac=None):
+    def __init__(self, targets, bandwidth, work_dir, resolve=True, force_resolve=False, skip_ping=False, force_ping=False, blacklist=None, whitelist=None, interface=None, gateway_mac=None):
 
         # target-specific open port counters
         # nested dictionary in format:
@@ -67,16 +68,20 @@ class Inventory:
         self.online_hosts_file          = str(work_dir / 'zmap/zmap_all_online_hosts.txt')
 
         self.skip_ping                  = skip_ping
-
-        # windows service friendly names for CSV
-        self.services                   = []
+        self.force_ping                 = force_ping
 
         self.update_config(bandwidth, work_dir, blacklist, whitelist)
+
+        # make sure zmap is installed
+        if not which('zmap'):
+            sys.stderr.write('\n[!] Please install zmap! :)\n\n')
+            sys.exit(1)
 
 
     def start(self):
 
-        if self.zmap_ping_targets and not self.primary_zmap_started and not self.skip_ping:
+        if self.zmap_ping_targets and not self.primary_zmap_started and \
+            ((not self.skip_ping) or (self.force_ping)):
 
             self.primary_zmap_started = True
 
@@ -133,6 +138,15 @@ class Inventory:
 
 
     def run_modules(self):
+
+        # make sure the right programs are installed
+        for module in list(self.active_modules):
+            progs_to_install = module.check_progs()
+            if progs_to_install:
+                self.active_modules.remove(module)
+                sys.stderr.write('\n[!] Error running module "{}"\n'.format(module.name))
+                sys.stderr.write('[!] Please ensure the following are installed and in your $PATH:\n')
+                sys.stderr.write('\n'.join([('     - ' + str(e)) for e in progs_to_install]) + '\n\n')
 
         for module in self.active_modules:
             module.run(self)
@@ -233,7 +247,7 @@ class Inventory:
             pass
 
         if not zmap_targets:
-            print('[!] No targets to scan')
+            print('[!] No targets to scan on port {}'.format(port))
             return (None, 0)
 
         else:
@@ -564,7 +578,7 @@ class Inventory:
         print('[+] Loaded {:,} hosts from cache'.format(len(self.hosts)))
 
         for target in self.targets:
-            if not target in cached_targets:
+            if not target in cached_targets or self.force_ping:
                 self.zmap_ping_targets.add(target)
 
 
@@ -652,7 +666,6 @@ class Inventory:
         for m in self.modules:
             fieldnames += m.csv_headers
         fieldnames += ['{}/tcp'.format(port) for port in self.open_ports]
-        fieldnames += self.services
 
         csv_writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
         csv_writer.writeheader()

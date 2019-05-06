@@ -7,7 +7,8 @@ from shutil import which
 
 class BaseModule():
 
-    work_dir_name   = 'tmp'
+    # string used for creating temp directory
+    name            = 'tmp'
     csv_headers     = []
     required_ports  = []
     required_progs  = []
@@ -15,19 +16,21 @@ class BaseModule():
     def __init__(self, inventory):
 
         # create working directory
-        self.work_dir = inventory.work_dir / 'modules' / self.work_dir_name
+        self.work_dir = inventory.work_dir / 'modules' / self.name
         self.work_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
 
     def check_progs(self):
 
+        progs_to_install = []
         for prog in self.required_progs:
-            assert which(prog), 'Please ensure {} is installed and in $PATH'.format(prog)
+            if not which(prog):
+                progs_to_install.append(prog)
+
+        return progs_to_install
 
 
     def run(self, inventory):
-
-        self.check_progs()
 
         for host in inventory:
             if 22 in host.open_ports:
