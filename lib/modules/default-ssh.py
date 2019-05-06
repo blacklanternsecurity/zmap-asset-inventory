@@ -1,5 +1,7 @@
 #!/usr/bin/env python3.7
 
+# by TheTechromancer
+
 import io
 import ipaddress
 from .base_module import *

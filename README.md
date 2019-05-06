@@ -48,9 +48,17 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
         - `$ ./asset_inventory.py -M default-ssh`
     - To check for default open VNC:
         - `$ ./asset_inventory.py -M open-vnc`
-1. **Combine all results into deliverable CSV**
-    - `$ ./asset_inventory.py --combine`
-    - A CSV file will be created in the current directory
+    - To check for open fileshares (SMB, FTP, and NFS):
+        - `$ ./asset_inventory.py -M open-shares`
+    - Multiple modules can be run at once, e.g.:
+        - `$ ./asset_inventory.py -M eternalblue open-vnc`
+        - `$ ./asset_inventory.py -M all`
+1. **Generate CSV**
+    - A report is automatically generated after each run
+        - They are saved in the working directory (default: ~/.asset_inventory)
+    - To combine all past reports:
+        - `$ ./asset_inventory.py --combine`
+        - A combined CSV file will be created in the current directory
 
 
 ## Usage:

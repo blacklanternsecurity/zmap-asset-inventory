@@ -1,13 +1,12 @@
 #!/usr/bin/env python3.7
 
-import string
+# by TheTechromancer
+
 import ipaddress
 from .base_module import *
 import subprocess as sp
 from datetime import datetime
 import xml.etree.cElementTree as xml # for parsing Nmap output
-
-# by TheTechromancer
 
 class Module(BaseModule):
 

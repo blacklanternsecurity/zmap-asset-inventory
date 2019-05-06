@@ -4,18 +4,8 @@
 
 '''
 TODO:
-    
-    - modularize extra features like vnc, ssh, services
-        - e.g. class Module():
-            module.ports = [445]
-            module.required_progs = ['nmap']
-            module.temp_dirs = ['eternalblue']
-            module.csv_headers = ['Vulnerable to EternalBlue']
-            def module.run(targets)
-
     - check domain when getting services
-
-    - output "{num} services found on {system}" instead of "Successful Authentication on {system}"
+        - also check for multi-homed systems / jumpboxes?
 '''
 
 import os

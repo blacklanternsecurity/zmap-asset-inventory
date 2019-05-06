@@ -1,16 +1,15 @@
 #!/usr/bin/env python3.7
 
+# by TheTechromancer
+
 import sys
-import string
 import ipaddress
 from time import sleep
+import subprocess as sp
 import concurrent.futures
 from .base_module import *
-import subprocess as sp
 from datetime import datetime
 import xml.etree.cElementTree as xml # for parsing Nmap output
-
-# by TheTechromancer
 
 class Module(BaseModule):
 
