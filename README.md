@@ -64,13 +64,12 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
 ## Usage:
 ~~~
 # ./asset_inventory.py --help
-usage: asset_inventory.py [-h] [-t STR [STR ...]] [-n] [-B STR] [-i IFC]
-                               [-G MAC] [--blacklist FILE] [--whitelist FILE]
-                               [-w CSV_FILE] [-f] [-p PORTS [PORTS ...]] [-Pn]
-                               [-e] [-v] [-s] [--work-dir DIR] [-d FILE]
-                               [--netmask NETMASK] [--ssh]
-                               [--ufail-limit UFAIL_LIMIT]
-                               [--combine-all-assets]
+usage: asset_inventory.py [-h] [-t STR [STR ...]] [-p PORTS [PORTS ...]] [-n]
+                          [--force-dns] [-B STR] [-i IFC] [-G MAC]
+                          [--blacklist FILE] [--whitelist FILE] [-w CSV_FILE]
+                          [-f] [-Pn] [--force-ping]
+                          [-M [MODULES [MODULES ...]]] [--work-dir DIR]
+                          [-d FILE] [--netmask NETMASK] [--combine-all-assets]
 
 Assess the security posture of an internal network
 
@@ -78,9 +77,12 @@ optional arguments:
   -h, --help            show this help message and exit
   -t STR [STR ...], --targets STR [STR ...]
                         target network(s) to scan
-  -n, --dont-resolve    do not perform reverse DNS lookups
+  -p PORTS [PORTS ...], --ports PORTS [PORTS ...]
+                        port-scan online hosts
+  -n, --no-dns          do not perform reverse DNS lookups
+  --force-dns           force dns lookups while loading cache
   -B STR, --bandwidth STR
-                        max egress bandwidth (default 600K)
+                        max egress bandwidth (default 500K)
   -i IFC, --interface IFC
                         interface from which to scan (e.g. eth0)
   -G MAC, --gateway-mac MAC
@@ -91,21 +93,17 @@ optional arguments:
   -w CSV_FILE, --csv-file CSV_FILE
                         output CSV file
   -f, --start-fresh     don't load results from previous scans
-  -p PORTS [PORTS ...], --ports PORTS [PORTS ...]
-                        port-scan online hosts
   -Pn, --skip-ping      skip zmap host-discovery
-  -e, --check-eternal-blue
-                        scan for EternalBlue
-  -v, --vnc             scan for open VNC
-  -s, --check-services  enumerate select services with wmiexec (see
-                        services.config)
-  --work-dir DIR        custom working directory
+  --force-ping          force a new zmap ping sweep
+  -M [MODULES [MODULES ...]], --modules [MODULES [MODULES ...]]
+                        Module for additional checks such as EternalBlue (pick
+                        from eternalblue, open-vnc, open-shares, default-ssh,
+                        enum-services, all, *)
+  --work-dir DIR        custom working directory (default
+                        /home/bls/.asset_inventory)
   -d FILE, --diff FILE  show differences between scan results and IPs/networks
                         from file
-  --netmask NETMASK     summarize networks with this CIDR mask (default 24)
-  --ssh                 scan for default SSH creds (see lib/ssh_creds.txt)
-  --ufail-limit UFAIL_LIMIT
-                        limit consecutive wmiexec failed logins (default: 3)
+  --netmask NETMASK     summarize networks with this CIDR mask (default 16)
   --combine-all-assets  combine all previous results and save in current
                         directory
 ~~~
