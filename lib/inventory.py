@@ -567,7 +567,8 @@ class Inventory:
                                     print('[+]  - contains cached data'.format(str(target_net)))
                                     cached_targets.append(target_net)
                                 else:
-                                    print('[!] - cache file appears to be empty')
+                                    print('[+]  - empty (use --force-ping to scan again)')
+                                    cached_targets.append(target_net)
 
                     except StopIteration:
                         continue
