@@ -79,7 +79,7 @@ class Module(BaseModule):
 
 
         except AssertionError:
-            print('[!] Logon failure limit reached ({limit}/{limit})'.format(limit=options.ufail_limit))
+            print('[!] Logon failure limit reached ({limit}/{limit})'.format(limit=self.ufail_limit))
 
         finally:
             try:
