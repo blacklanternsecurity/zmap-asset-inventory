@@ -253,8 +253,9 @@ class Module(BaseModule):
 
         try:
 
+            config_path = "{0}/services.config".format(sys.path[0])
             config = configparser.ConfigParser()
-            config.read('services.config')
+            config.read(config_path)
 
             if not config:
                 raise KeyError('Error parsing config file')
