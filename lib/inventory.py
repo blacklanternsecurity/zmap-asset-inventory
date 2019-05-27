@@ -19,7 +19,7 @@ from .host import *
 
 class Inventory:
 
-    def __init__(self, targets, bandwidth, work_dir, resolve=True, force_resolve=False, skip_ping=False, force_ping=False, blacklist=None, whitelist=None, interface=None, gateway_mac=None):
+    def __init__(self, targets, bandwidth, work_dir, resolve=True, force_resolve=False, skip_ping=False, force_ping=False, force_syn=False, blacklist=None, whitelist=None, interface=None, gateway_mac=None):
 
         # target-specific open port counters
         # nested dictionary in format:
@@ -69,6 +69,7 @@ class Inventory:
 
         self.skip_ping                  = skip_ping
         self.force_ping                 = force_ping
+        self.force_syn                  = force_syn
 
         self.update_config(bandwidth, work_dir, blacklist, whitelist)
 
@@ -213,32 +214,39 @@ class Inventory:
             if not port in self.targets[target]:
                 self.targets[target][port] = 0
 
-        if self.skip_ping:
-            zmap_targets = [str(t) for t in targets]
+        if self.whitelist_arg:
+            zmap_targets = self.whitelist_arg
+
+        elif self.skip_ping:
+            zmap_targets = [str(t) for t in self.targets]
 
         else:
-            if self.whitelist_arg:
-                zmap_targets = self.whitelist_arg
-            else:
-                zmap_targets = ['--whitelist-file={}'.format(zmap_whitelist_file)]
-                # write target IPs to file for zmap
-                hosts_written = False
-                with open(str(zmap_whitelist_file), 'w') as f:
+            zmap_targets = ['--whitelist-file={}'.format(zmap_whitelist_file)]
+            # write target IPs to file for zmap
+            hosts_written = 0
+            with open(str(zmap_whitelist_file), 'w') as f:
+
+                if self.force_syn:
+                    for host in self:
+                        f.write(str(host.ip) + '\n')
+                        hosts_written += 1
+
+                else:
                     for target in targets:
                         for ip in self.hosts:
                             if ip in target:
                                 #print(str(ip), ' is in ', str(target))
-                                hosts_written = True
+                                hosts_written += 1
                                 f.write(str(ip) + '\n')
                             else:
                                 #print(str(ip), ' is not in ', str(target))
                                 pass
 
-                if not hosts_written:
-                    print('[+] No hosts to scan on port {}'.format(port))
-                    return (None, 0)
-                else:
-                    print('[+] Scanning {:,} hosts on port {}'.format(len(self.hosts), port))
+            if hosts_written <= 0:
+                print('[+] No hosts to scan on port {}'.format(port))
+                return (None, 0)
+            else:
+                print('[+] Scanning {:,} hosts on port {}'.format(hosts_written, port))
 
         self.secondary_zmap_started = True
 

@@ -42,7 +42,7 @@ class Module(BaseModule):
         self.lockout_counter = 0
 
         # {ip : 'wmiexec_output'}
-        self.wmiexec_raw_output = dict()
+        self.raw_wmiexec_output = dict()
         # {ip: {service: 'Yes'}}
         self.services = dict()
         
@@ -87,12 +87,11 @@ class Module(BaseModule):
                     print('[+] Writing raw command output to {}'.format(self.raw_output_file))
                     with open(self.raw_output_file, 'w') as f:
                         for ip, output in self.raw_wmiexec_output.items():
-                            f.write('=' * 10 + '\n')
                             f.write(str(ip) + '\n')
                             f.write('=' * 5 + '\n')
                             f.write(str(output) + '\n')
                             f.write('==' + '\n')
-            except:
+            except (NameError, UnboundLocalError):
                 pass
 
 
@@ -326,9 +325,7 @@ class wmiexec:
     def get_services(self):
         '''
         enumerates requested services
-        returns tuple (os_name: { service_fname: True|False ... } )
-        returns None if no unreachable
-        returns empty string if no results
+        returns tuple (os_name, { service_fname: True|False ... } )
         '''
 
         service_keywords = set()
@@ -375,11 +372,13 @@ class wmiexec:
 
     def run_wmiexec(self, command, timeout=10):
 
-        wmiexec_command = ['wmiexec.py'] + self.wmi_auth + [command]
+        wmiexec_base = ['wmiexec.py'] + self.wmi_auth
+        wmiexec_command = wmiexec_base + [command]
 
-        print(' >> ' + ' '.join(wmiexec_command))
+        print(' >> ' + ' '.join(wmiexec_base) + " '{}'".format(command))
         try:
-            wmiexec_process = sp.run(wmiexec_command, stdout=sp.PIPE, stderr=sp.PIPE, timeout=timeout)
+            env = dict(os.environ, PYTHONIOENCODING='UTF-8')
+            wmiexec_process = sp.run(wmiexec_command, stdout=sp.PIPE, stderr=sp.PIPE, timeout=timeout, env=env)
             self.raw_stdout = wmiexec_process.stdout.decode()
             self.raw_stderr = wmiexec_process.stderr.decode()
             return (self.raw_stdout, self.raw_stderr)

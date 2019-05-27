@@ -86,8 +86,8 @@ def main(options):
     else:
 
         z = Inventory(options.targets, options.bandwidth, resolve=(not options.no_dns), force_resolve=options.force_dns, \
-            work_dir=cache_dir, skip_ping=options.skip_ping, force_ping=options.force_ping, blacklist=options.blacklist, \
-            whitelist=options.whitelist, interface=options.interface, \
+            work_dir=cache_dir, skip_ping=options.skip_ping, force_ping=options.force_ping, force_syn=options.force_syn, \
+            blacklist=options.blacklist, whitelist=options.whitelist, interface=options.interface, \
             gateway_mac=options.gateway_mac)
 
         def load_module(m, active=False):
@@ -319,6 +319,7 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--start-fresh',      action='store_true',        help='don\'t load results from previous scans')
     parser.add_argument('-Pn', '--skip-ping',       action='store_true',        help='skip zmap host-discovery')
     parser.add_argument('--force-ping',             action='store_true',        help='force a new zmap ping sweep')
+    parser.add_argument('--force-syn',              action='store_true',        help='SYN scan hosts which have already been scanned')
     parser.add_argument('-M', '--modules', nargs='*',   default=[],             help='Module for additional checks such as EternalBlue (pick from {})'.format(', '.join(detected_modules + ['all', '*'])))
     parser.add_argument('--work-dir', type=Path,    default=default_work_dir,   help='custom working directory (default {})'.format(default_work_dir), metavar='DIR')
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
