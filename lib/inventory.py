@@ -9,28 +9,27 @@ import sys
 import tempfile
 import ipaddress
 from time import sleep
-from lib.host import *
-from lib.nmap import *
 import subprocess as sp
+from shutil import which
 from pathlib import Path
-from lib.host import Host
-from lib.brute_ssh import *
 from datetime import datetime
 
+from .host import *
 
-class Zmap:
 
-    def __init__(self, targets, bandwidth, work_dir, skip_ping=False, blacklist=None, interface=None, gateway_mac=None):
+class Inventory:
+
+    def __init__(self, targets, bandwidth, work_dir, resolve=True, force_resolve=False, skip_ping=False, force_ping=False, force_syn=False, blacklist=None, whitelist=None, interface=None, gateway_mac=None):
 
         # target-specific open port counters
         # nested dictionary in format:
         # { target: { port: open_count ... } ... }
         self.targets = dict()
         for target in targets:
-            if type(target) == ipaddress.IPv4Address or type(target) == ipaddress.IPv4Network:
-                self.targets[target]    = dict()
-            else:
-                raise ValueError('Invalid type for target: {}'.format(str(type(target))))
+            try:
+                self.targets[ipaddress.ip_network(target)] = dict()
+            except ValueError:
+                raise ValueError('Invalid target: {}'.format(str(target)))
 
         # global open port counters
         # dictionary in format:
@@ -42,8 +41,17 @@ class Zmap:
         # { ip_address(): Host() ... }
         self.hosts                      = dict()
 
+        self.modules                    = []
+        self.active_modules             = []
+
+        # whether or not to perform reverse DNS lookups
+        self.resolve                    = resolve
+        self.force_resolve              = force_resolve
+
         if interface is None:
             self.interface_arg          = []
+        elif interface.startswith('tun'):
+            self.interface_arg          = ['--interface={}'.format(str(interface)), '--vpn']
         else:
             self.interface_arg          = ['--interface={}'.format(str(interface))]
 
@@ -56,28 +64,33 @@ class Zmap:
         self.eternal_blue_count         = 0
         self.host_discovery_finished    = False
 
-        self.zmap_ping_file             = str(work_dir / 'zmap_ping_{date:%Y-%m-%d_%H-%M-%S}.txt'.format(date=datetime.now()))
-        self.online_hosts_file          = str(work_dir / 'zmap_all_online_hosts.txt')
+        self.zmap_ping_file             = str(work_dir / 'zmap/zmap_ping_{date:%Y-%m-%d_%H-%M-%S}.txt'.format(date=datetime.now()))
+        self.online_hosts_file          = str(work_dir / 'zmap/zmap_all_online_hosts.txt')
 
         self.skip_ping                  = skip_ping
+        self.force_ping                 = force_ping
+        self.force_syn                  = force_syn
 
-        # windows service friendly names for CSV
-        self.services                   = []
+        self.update_config(bandwidth, work_dir, blacklist, whitelist)
 
-        self.update_config(bandwidth, work_dir, blacklist)
-        self.load_scan_cache()
+        # make sure zmap is installed
+        if not which('zmap'):
+            sys.stderr.write('\n[!] Please install zmap! :)\n\n')
+            sys.exit(1)
 
 
     def start(self):
 
-        if self.zmap_ping_targets and not self.primary_zmap_started and not self.skip_ping:
+        if self.zmap_ping_targets and not self.primary_zmap_started and \
+            ((not self.skip_ping) or (self.force_ping)):
 
             self.primary_zmap_started = True
 
-            zmap_command = ['zmap', '--blacklist-file={}'.format(self.blacklist), \
+            zmap_command = ['zmap', '--cooldown-time=3', '--blacklist-file={}'.format(self.blacklist_arg), \
                 '--bandwidth={}'.format(self.bandwidth), \
                 '--probe-module=icmp_echoscan'] + self.interface_arg + \
-                self.gateway_mac_arg + [str(t) for t in self.zmap_ping_targets]
+                self.gateway_mac_arg + self.whitelist_arg + \
+                ([] if self.whitelist_arg else [str(t) for t in self.zmap_ping_targets])
 
             print('\n[+] Running zmap ping scan:\n\t> {}\n'.format(' '.join(zmap_command)))
 
@@ -125,29 +138,25 @@ class Zmap:
         return hosts_sorted
 
 
-    def check_eternal_blue(self):
+    def run_modules(self):
 
-        print('\n[+] Scanning for EternalBlue')
+        # make sure the right programs are installed
+        for module in list(self.active_modules):
+            progs_to_install = module.check_progs()
+            if progs_to_install:
+                self.active_modules.remove(module)
+                sys.stderr.write('\n[!] Error running module "{}"\n'.format(module.name))
+                sys.stderr.write('[!] Please ensure the following are installed and in your $PATH:\n')
+                sys.stderr.write('\n'.join([('     - ' + str(e)) for e in progs_to_install]) + '\n\n')
 
-        nmap_input_file, new_ports_found = self.scan_online_hosts(port=445)
+        for module in self.active_modules:
+            module.run(self)
 
-        if nmap_input_file is None:
-            # make temporary input file for nmap
-            nmap_input_file = str(self.work_dir / 'nmap/nmap_eternalblue_hosts_to_scan')
-            with open(nmap_input_file, 'w') as f:
-                for host in self:
-                    if 445 in host.open_ports:
-                        f.write(str(host['IP Address']) + '\n')
 
-        for ip, vulnerable in Nmap(nmap_input_file, work_dir=self.work_dir / 'nmap'):
-            if vulnerable:
-                self.eternal_blue_count += 1
-                if not ip in self.hosts:
-                    self.hosts[ip] = Host(ip)
-                self.hosts[ip]['Vulnerable to EternalBlue'] = 'Yes'
-            else:
-                self.hosts[ip]['Vulnerable to EternalBlue'] = 'No'
+    def module_reports(self):
 
+        for module in self.active_modules:
+            module.report(self)
 
 
     def brute_ssh(self):
@@ -175,20 +184,14 @@ class Zmap:
         # then sort by host count
         summarized_hosts.sort(key=lambda x: x[1], reverse=True)
         for subnet in summarized_hosts:
-            print('\t{:<19}{:<10}'.format(str(subnet[0]), ' ({:,} | {:.2f}%)'.format(subnet[1], subnet[1]/len(self.hosts)*100)))
+            print('\t{:<19}{:<10}'.format(str(subnet[0]), ' ({:,} | {:.1f}%)'.format(subnet[1], subnet[1]/len(self.hosts)*100)))
 
         print('')
-        for port, open_port_count in self.open_ports.items():
-            print('[+] {:,} host(s) with port {} open ({:.2f}%)'.format(\
+        open_port_counts = list(self.open_ports.items())
+        open_port_counts.sort(key=lambda x: x[1], reverse=True)
+        for port, open_port_count in open_port_counts:
+            print('[+] {:,} host(s) with port {} open ({:.1f}%)'.format(\
                     open_port_count, port, (open_port_count / len(self.hosts) * 100)))
-
-        if self.eternal_blue_count > 0:
-            print('\n')
-            print('[+] Vulnerable to EternalBlue: {:,}\n'.format(self.eternal_blue_count))
-            for host in self.hosts.values():
-                if host['Vulnerable to EternalBlue'] == 'Yes':
-                    print('\t{}'.format(str(host)))
-            print('')
 
         print('')
 
@@ -201,7 +204,7 @@ class Zmap:
 
         port = int(port)
         zmap_out_file = self.work_dir / 'zmap/zmap_port_{}_{date:%Y-%m-%d_%H-%M-%S}.txt'.format(port, date=datetime.now())
-        zmap_whitelist_file = self.work_dir / '.zmap_tmp_whitelist_port_{}.txt'.format(port)
+        zmap_whitelist_file = self.work_dir / 'zmap/zmap_tmp_whitelist_port_{}.txt'.format(port)
         targets = [t[0] for t in self.targets.items() if port not in t[1]]
 
         # fill target-specific port counts
@@ -211,29 +214,39 @@ class Zmap:
             if not port in self.targets[target]:
                 self.targets[target][port] = 0
 
-        if self.skip_ping:
-            zmap_targets = [str(t) for t in targets]
+        if self.whitelist_arg:
+            zmap_targets = self.whitelist_arg
+
+        elif self.skip_ping:
+            zmap_targets = [str(t) for t in self.targets]
 
         else:
-            zmap_targets = ['--whitelist-file={}'.format(str(zmap_whitelist_file))]
+            zmap_targets = ['--whitelist-file={}'.format(zmap_whitelist_file)]
             # write target IPs to file for zmap
-            hosts_written = False
+            hosts_written = 0
             with open(str(zmap_whitelist_file), 'w') as f:
-                for target in targets:
-                    for ip in self.hosts:
-                        if ip in target:
-                            #print(str(ip), ' is in ', str(target))
-                            hosts_written = True
-                            f.write(str(ip) + '\n')
-                        else:
-                            #print(str(ip), ' is not in ', str(target))
-                            pass
 
-            if not hosts_written:
+                if self.force_syn:
+                    for host in self:
+                        f.write(str(host.ip) + '\n')
+                        hosts_written += 1
+
+                else:
+                    for target in targets:
+                        for ip in self.hosts:
+                            if ip in target:
+                                #print(str(ip), ' is in ', str(target))
+                                hosts_written += 1
+                                f.write(str(ip) + '\n')
+                            else:
+                                #print(str(ip), ' is not in ', str(target))
+                                pass
+
+            if hosts_written <= 0:
                 print('[+] No hosts to scan on port {}'.format(port))
                 return (None, 0)
             else:
-                print('[+] Scanning {:,} hosts on port {}'.format(len(self.hosts), port))
+                print('[+] Scanning {:,} hosts on port {}'.format(hosts_written, port))
 
         self.secondary_zmap_started = True
 
@@ -242,14 +255,15 @@ class Zmap:
             pass
 
         if not zmap_targets:
-            print('[!] No targets to scan')
+            print('[!] No targets to scan on port {}'.format(port))
             return (None, 0)
 
         else:
 
-            zmap_command = ['zmap', '--blacklist-file={}'.format(self.blacklist), \
+            zmap_command = ['zmap', '--cooldown-time=3', '--blacklist-file={}'.format(self.blacklist_arg), \
                 '--bandwidth={}'.format(self.bandwidth), '--target-port={}'.format(port)] + \
-                self.gateway_mac_arg + self.interface_arg + zmap_targets
+                self.gateway_mac_arg + self.interface_arg + self.whitelist_arg + \
+                ([] if self.whitelist_arg else zmap_targets)
 
             print('\n[+] Running zmap SYN scan on port {}:\n\t> {}\n'.format(port, ' '.join(zmap_command)))
 
@@ -275,7 +289,7 @@ class Zmap:
 
                         print('[+] {:<23}{:<10}'.format('{}:{}'.format(str(ip), port), self.hosts[ip]['Hostname']))
 
-                        # write IP to file even if the port was previouslyfound
+                        # write IP to file even if the port was found previously
                         # for scanning eternal blue, etc.
                         f.write(str(ip) + '\n')
 
@@ -306,7 +320,7 @@ class Zmap:
         return (zmap_out_file, new_ports_found)
 
 
-    def update_config(self, bandwidth, work_dir, blacklist=None):
+    def update_config(self, bandwidth, work_dir, blacklist=None, whitelist=None):
 
         self.bandwidth              = str(bandwidth).upper()
         self.primary_zmap_process   = None
@@ -319,17 +333,61 @@ class Zmap:
         if not any([self.bandwidth.endswith(s) for s in ['K', 'M', 'G']]):
             raise ValueError('Invalid bandwidth: {}'.format(self.bandwidth))
 
+
+        ### BLACKLIST ###
+
+        self.blacklist = []
+
         # validate blacklist arg
         if blacklist is None:
-            blacklist = work_dir / '.zmap_blacklist_tmp'
+            blacklist = work_dir / 'zmap/zmap_tmp_blacklist'
             blacklist.touch(mode=0o644, exist_ok=True)
-            self.blacklist = str(blacklist)
+            self.blacklist_arg = str(blacklist)
         else:
-            self.blacklist = Path(blacklist)
-            if not self.blacklist.is_file():
-                raise ValueError('Cannot process blacklist file: {}'.format(str(self.blacklist)))
+            self.blacklist_arg = Path(blacklist).resolve()
+            if not self.blacklist_arg.is_file():
+                raise ValueError('Cannot process blacklist file: {}'.format(str(self.blacklist_arg)))
             else:
-                self.blacklist = str(self.blacklist.resolve())
+                self.blacklist_arg = str(self.blacklist_arg)
+
+            with open(self.blacklist_arg) as f:
+                for line in f.readlines():
+                    line = line.strip()
+                    try:
+                        entry = ipaddress.ip_network(line, strict=False)
+                        if not entry in self.blacklist:
+                            self.blacklist.append(entry)
+                    except ValueError:
+                        continue
+
+
+        ### WHITELIST ###
+
+        # list of ip_network objects
+        self.whitelist = []
+
+        if whitelist is None:
+            # filename of whitelist file (for zmap, etc.)
+            self.whitelist_file = None
+            # whitelist argument to be passed to zmap
+            self.whitelist_arg = []
+
+        else:
+            self.whitelist_file = Path(whitelist).resolve()
+            if not self.whitelist_file.is_file():
+                raise ValueError('Cannot process whitelist file: {}'.format(self.whitelist_file))
+            else:
+                self.whitelist_arg = ['--whitelist-file={}'.format(str(self.whitelist_file))]
+
+            with open(self.whitelist_file) as f:
+                for line in f.readlines():
+                    line = line.strip()
+                    try:
+                        entry = ipaddress.ip_network(line, strict=False)
+                        if not entry in self.whitelist:
+                            self.whitelist.append(entry)
+                    except ValueError:
+                        continue
 
 
     def get_network_delta(self, sub_host_file, netmask=24):
@@ -481,6 +539,8 @@ class Zmap:
     def load_scan_cache(self):
 
         print('[+] Loading scan cache')
+        if not self.force_resolve:
+            print('[+] NOTE: you can force DNS lookups on cached hosts with --force-dns')
 
         cached_targets = []
 
@@ -515,7 +575,8 @@ class Zmap:
                                     print('[+]  - contains cached data'.format(str(target_net)))
                                     cached_targets.append(target_net)
                                 else:
-                                    print('[!] - cache file appears to be empty')
+                                    print('[+]  - empty (use --force-ping to scan again)')
+                                    cached_targets.append(target_net)
 
                     except StopIteration:
                         continue
@@ -523,8 +584,10 @@ class Zmap:
         except StopIteration:
             return
 
+        print('[+] Loaded {:,} hosts from cache'.format(len(self.hosts)))
+
         for target in self.targets:
-            if not target in cached_targets:
+            if not target in cached_targets or self.force_ping:
                 self.zmap_ping_targets.add(target)
 
 
@@ -533,7 +596,7 @@ class Zmap:
     def read_csv(self, csv_file):
         '''
         takes name of CSV file to read
-        injests contents
+        ingests contents
         returns number of hosts therein
         '''
 
@@ -541,14 +604,12 @@ class Zmap:
         empty_file = True
         open_ports = dict()
 
-        # default CSV output
-        if csv_file is None:
-            csv_file = self.work_dir / 'state.csv'
-
         with open(str(csv_file), newline='') as f:
             c = csv.DictReader(f)
 
             for line in c:
+
+                line = dict(line)
 
                 try:
                     ip = ipaddress.ip_address(line['IP Address'])
@@ -557,11 +618,9 @@ class Zmap:
                     #print('[!] Invalid IP address: {}'.format(str(line['IP Address'])))
                     continue
 
-                host = Host(ip=ip, hostname=line['Hostname'])
-                vulnerable_to_eb = line['Vulnerable to EternalBlue']
-                if vulnerable_to_eb.capitalize() == 'Yes':
-                    self.eternal_blue_count += 1
-                host['Vulnerable to EternalBlue'] = vulnerable_to_eb
+                host = Host(ip=line['IP Address'], hostname=line['Hostname'], resolve=self.force_resolve)
+                for module in self.modules:
+                    module.read_host(line, host)
 
                 # if we've already seen this host, merge it
                 if ip not in self.hosts:
@@ -570,10 +629,11 @@ class Zmap:
                 else:
                     self.hosts[ip].merge(host)
 
-                for field in c.fieldnames:
-                    if field.endswith('/tcp'):
-                        port = int(field.split('/')[0])
-                        if line[field] == 'Open':
+                for key, value in line.items():
+                    value = value.strip()
+                    if key.endswith('/tcp'):
+                        port = int(key.split('/')[0])
+                        if value.lower() == 'open':
                             if not port in self.open_ports:
                                 self.open_ports[port] = 0
 
@@ -585,6 +645,12 @@ class Zmap:
                                 open_ports[port] += 1
                             except KeyError:
                                 open_ports[port] = 1
+
+                    # all other values are loaded here, to preserve module output between executions
+                    # even if the module is not loaded
+                    # currently, a module's read_host() method is not needed
+                    #elif value:
+                    #    host.update({key: value})
 
 
         return (empty_file, open_ports)
@@ -603,8 +669,14 @@ class Zmap:
             csv_file = self.work_dir / 'asset_inventory.csv'
 
         f = open(csv_file, 'w', newline='')
-        csv_writer = csv.DictWriter(f, fieldnames=['IP Address', 'Hostname', 'Vulnerable to EternalBlue'] + \
-            ['{}/tcp'.format(port) for port in self.open_ports] + self.services, extrasaction='ignore')
+
+        # build CSV headers
+        fieldnames = ['IP Address', 'Hostname']
+        for m in self.modules:
+            fieldnames += m.csv_headers
+        fieldnames += ['{}/tcp'.format(port) for port in self.open_ports]
+
+        csv_writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
         csv_writer.writeheader()
 
         return (csv_writer, f)
@@ -692,11 +764,31 @@ class Zmap:
 
 
 
+    def _valid_host(self, host):
+        '''
+        given a host, return whether or not it's valid based on whitelist and blacklist
+        '''
+
+        if type(host) == str:
+            host = ipaddress.ip_address(host)
+        elif type(host) == Host:
+            host = host.ip
+
+        if not any([host in network for network in self.blacklist]):
+            if not self.whitelist or any([host in network for network in self.whitelist]):
+                if any([host in target for target in self.targets]):
+                    return True
+
+        return False
+
+
+
     def __iter__(self):
 
         for host in self.hosts.values():
             #f.write(host['IP Address'] + '\n')
-            yield host
+            if self._valid_host(host):
+                yield host
 
         if self.zmap_ping_targets and not self.primary_zmap_started and not self.skip_ping:
 
@@ -709,11 +801,12 @@ class Zmap:
                         ip = ipaddress.ip_address(line.strip())
                     except ValueError:
                         continue
-                    host = Host(ip, resolve=True)
+                    host = Host(ip, resolve=self.resolve)
                     print('[+] {:<17}{:<10} '.format(host['IP Address'], host['Hostname']))
                     self.hosts[ip] = host
                     f.write(str(ip) + '\n')
-                    yield host
+                    if self._valid_host(host):
+                        yield host
 
                 self.zmap_ping_targets.clear()
 
