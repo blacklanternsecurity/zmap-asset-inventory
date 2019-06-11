@@ -14,8 +14,8 @@ import xml.etree.cElementTree as xml # for parsing Nmap output
 class Module(BaseModule):
 
     name            = 'open-shares'
-    csv_headers     = ['Open FTP', 'Open SMB', 'Open NFS']
-    required_ports  = [21,111,139,445,9100]
+    csv_headers     = ['Open FTP', 'Open NFS'] #'Open SMB',
+    required_ports  = [21,111,9100] #139,445
     required_progs  = ['nmap']
 
     def __init__(self, inventory):
@@ -34,7 +34,7 @@ class Module(BaseModule):
             sleep(1)
             executor.submit(self.check_nfs, inventory)
         '''
-        self.check_smb(inventory)
+        #self.check_smb(inventory)
         self.check_ftp(inventory)
         self.check_nfs(inventory)
 
@@ -261,6 +261,7 @@ class Module(BaseModule):
             print('[+] No systems found with open NFS shares')
         print('')
 
+        '''
         vulnerable_hosts = []
         for host in inventory:
             try:
@@ -275,6 +276,7 @@ class Module(BaseModule):
         else:
             print('[+] No systems found with open SMB shares')
         print('')
+        '''
 
         vulnerable_hosts = []
         for host in inventory:

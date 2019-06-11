@@ -2,6 +2,7 @@
 
 # by TheTechromancer
 
+import sys
 import ipaddress
 from .base_module import *
 import subprocess as sp

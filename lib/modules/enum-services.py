@@ -63,7 +63,7 @@ class Module(BaseModule):
                     print('\n[+] No valid targets for service enumeration')
 
                 else:
-                    print('\n[+] Retrieving service information for Windows hosts')
+                    print('\n[+] Retrieving service information for {:,} Windows hosts'.format(len(hosts_to_scan)))
                     # shuffle hosts
                     hosts_to_scan = random.sample(hosts_to_scan, len(hosts_to_scan))
 
