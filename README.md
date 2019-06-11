@@ -107,3 +107,41 @@ optional arguments:
   --combine-all-assets  combine all previous results and save in current
                         directory
 ~~~
+
+## NOTE: For best results, run in a Docker container
+Zmap has trouble scanning the local subnet, which can be fixed by using Docker's built-in NAT
+
+1. Build docker image
+    ~~~
+    $ docker build -t zmap-assets .
+    ~~~
+1. Start container (making sure to remap the script's working directory to the host)
+    ~~~
+    $ docker run -it -v /root/inventory/asset_inventory:/root/.asset_inventory zmap-assets
+    ~~~
+1. Start scan with desired options
+    ~~~
+    $ ./zmap-asset-inventory -t 10.0.0.0/8
+    ~~~
+1. (Optional) Change the default Docker network if it overlaps with any of your target subnets
+    - It's 172.16.0.1/16 by default
+    ~~~
+    $ ip addr
+    ...
+    1: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default 
+        link/ether 02:44:73:ff:35:93 brd ff:ff:ff:ff:ff:ff
+        inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+           valid_lft forever preferred_lft forever
+    ...
+    ~~~
+    - Edit `/etc/docker/daemon.json`
+    ~~~
+    $ sudo vim /etc/docker/daemon.json
+    {
+        "bip": "172.16.99.1/24",
+    }
+    ~~~
+    - Restart dockerd
+    ~~~
+    $ sudo systemctl restart docker
+    ~~~
