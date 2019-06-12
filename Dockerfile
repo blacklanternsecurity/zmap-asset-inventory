@@ -13,6 +13,10 @@
 
 FROM ubuntu:16.04
 
+# INSTALL DUMB-INIT
+RUN apt-get -y install python-dev python-pip
+RUN pip install dumb-init
+
 # INSTALL ZMAP
 RUN apt-get -y install zmap
 
