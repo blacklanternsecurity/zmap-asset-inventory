@@ -14,20 +14,20 @@
 FROM ubuntu:16.04
 
 # INSTALL DUMB-INIT
+RUN apt-get -y update
+RUN apt-get -y upgrade
 RUN apt-get -y install python-dev python-pip
 RUN pip install dumb-init
 
 # INSTALL ZMAP
 RUN apt-get -y install zmap
 
-# INSTALL NMAP + SCRIPTS, PING, TRACEROUTE, VNCSNAPSHOT, GIT, PYTHON2
-RUN apt-get -y install iputils-ping net-tools python-pip git nmap vncsnapshot
+# INSTALL NMAP + SCRIPTS, PING, TRACEROUTE, VNCSNAPSHOT, GIT
+RUN apt-get -y install iputils-ping net-tools git nmap vncsnapshot
 WORKDIR /usr/share/nmap/scripts
 RUN wget https://svn.nmap.org/nmap/scripts/smb-vuln-ms17-010.nse
 
 # INSTALL IMPACKET
-RUN apt-get update
-RUN apt-get update --fix-missing
 RUN apt-get -y install
 RUN python2 -m pip install pipenv
 RUN rm -r $(ls /root/.local/share/virtualenvs | grep impacket | head -n 1) &>/dev/null
