@@ -316,7 +316,7 @@ if __name__ == '__main__':
     parser.add_argument('--blacklist',                                          help='a file containing hosts to exclude from scanning', metavar='FILE')
     parser.add_argument('--whitelist',                                          help='only these hosts (those which overlap with targets) will be scanned', metavar='FILE')
     parser.add_argument('-w', '--csv-file',                                     help='output CSV file', metavar='CSV_FILE')
-    parser.add_argument('-f', '--start-fresh',      action='store_true',        help='don\'t load results from previous scans')
+    parser.add_argument('-f', '--start-fresh',      action='store_true',        help='discard cached data (a backup is made)')
     parser.add_argument('-Pn', '--skip-ping',       action='store_true',        help='skip zmap host-discovery')
     parser.add_argument('--force-ping',             action='store_true',        help='force a new zmap ping sweep')
     parser.add_argument('--force-syn',              action='store_true',        help='SYN scan hosts which have already been scanned')
