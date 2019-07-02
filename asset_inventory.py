@@ -67,8 +67,8 @@ def main(options):
         options.csv_file = options.work_dir / 'asset_inventory_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now() )
 
 
-    if options.combine_all_assets:
-        print('[+] Combining all assets discovered to date')
+    if options.make_deliverable:
+        print('[+] Combining all data gathered to date for online hosts')
 
         csv_files = []
         try:
@@ -80,7 +80,7 @@ def main(options):
         except StopIteration:
             pass
 
-        combine_csv(csv_files)
+        make_deliverable(csv_files)
 
 
     else:
@@ -252,11 +252,17 @@ def parse_target_args(targets):
 
 
 
-def combine_csv(csv_files):
+def make_deliverable(csv_files):
     '''
     takes a list of asset inventory CSV files and combines them
     writes to a new CSV file in the current directory
     '''
+
+    try:
+        import openpyxl
+    except ImportError:
+        sys.stderr.write('\n[!] Please run "python3 -m pip install openpyxl"\n\n')
+        return
 
     hosts = dict()
     fieldnames = []
@@ -264,16 +270,31 @@ def combine_csv(csv_files):
     for file in csv_files:
         try:
             with open(file, newline='') as f:
+
                 c = csv.DictReader(f)
+
+                if not fieldnames:
+                    fieldnames = ['IP Address', 'Hostname', 'Open Ports']
+
                 for field in c.fieldnames:
-                    if not field in fieldnames:
+                    if not field in fieldnames and not field.lower().endswith('/tcp'):
                         fieldnames.append(field)
+
                 for row in c:
+
                     row = dict(row)
+                    ports = set()
                     ip = ipaddress.ip_address(row['IP Address'])
-                    if not ip in hosts:
-                        hosts[ip] = row
-                    else:
+
+                    for k in list(row):
+                        if k.lower().endswith('/tcp'):
+                            try:
+                                ports.add(int(row.pop(k).split('/')[0]))
+                            except ValueError:
+                                continue
+
+                    try:
+                        ports.update(hosts[ip]['Open Ports'])
                         for k,v in row.items():
                             if v and not v.lower() in ['unknown', 'n/a', 'closed']:
                                 # skip if the cell isn't empty
@@ -282,10 +303,17 @@ def combine_csv(csv_files):
                                         continue
                                 hosts[ip].update({k: v})
 
+                    except KeyError:
+                        hosts[ip] = row
+
+                    finally:
+                        hosts[ip].update({'Open Ports': ports})
+
         except KeyError:
             sys.stderr.write('[!] Error combining {}\n'.format(file))
             continue
         
+
     out_filename = 'combined_asset_inventory_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now() )
     print('[+] Writing combined list to {}'.format(out_filename))
     with open(out_filename, newline='', mode='w') as f:
@@ -294,6 +322,9 @@ def combine_csv(csv_files):
         hosts = list(hosts.items())
         hosts.sort(key=lambda x: x[0])
         for ip, host in hosts:
+            host['Open Ports'] = list(host['Open Ports'])
+            host['Open Ports'].sort()
+            host['Open Ports'] = ', '.join([str(p) for p in hosts['Open Ports']])
             c.writerow(host)
 
 
@@ -324,7 +355,7 @@ if __name__ == '__main__':
     parser.add_argument('--work-dir', type=Path,    default=default_work_dir,   help='custom working directory (default {})'.format(default_work_dir), metavar='DIR')
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
     parser.add_argument('--netmask',      type=int, default=default_cidr_mask,  help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
-    parser.add_argument('--combine-all-assets',     action='store_true',        help='combine all previous results and save in current directory')
+    parser.add_argument('--make-deliverable',       action='store_true',        help='combine all data gathered for each host into a deliverable XLSX file')
 
     try:
 
