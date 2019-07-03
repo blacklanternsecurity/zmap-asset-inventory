@@ -203,7 +203,7 @@ def main(options):
         except StopIteration:
             pass
 
-        filename = 'combined_asset_inventory_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now() )
+        filename = options.work_dir / 'asset_inventory_deliverable_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now() )
 
         deliverable = Deliverable(z, csv_files)
         deliverable.generate_xlsx(filename)
