@@ -18,6 +18,7 @@ import ipaddress
 from pathlib import Path
 from datetime import datetime
 from lib.host import *
+from lib.deliverable import *
 from lib.inventory import Inventory
 
 
@@ -67,8 +68,130 @@ def main(options):
         options.csv_file = options.work_dir / 'asset_inventory_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now() )
 
 
+    z = Inventory(options.targets, options.bandwidth, resolve=(not options.no_dns), force_resolve=options.force_dns, \
+        work_dir=cache_dir, skip_ping=options.skip_ping, force_ping=options.force_ping, force_syn=options.force_syn, \
+        blacklist=options.blacklist, whitelist=options.whitelist, interface=options.interface, \
+        gateway_mac=options.gateway_mac)
+
+    def load_module(m, active=False):
+        z.modules.append(m)
+        if active:
+            z.active_modules.append(m)
+            try:
+                options.ports += m.required_ports
+            except TypeError:
+                options.ports = m.required_ports
+
+    for module in detected_modules:
+        module_name = 'lib.modules.{}'.format(module)
+        try:
+            #_m = importlib.import_module(module_name, package=__package__)
+            _m = importlib.import_module(module_name)
+            m = _m.Module(z)
+            load_module(m, active=(module in options.modules))
+        except ImportError as e:
+            sys.stderr.write('[!] Error importing {}:\n{}\n'.format(module_name, str(e)))
+            continue
+
+
+    # load cached hosts
+    z.load_scan_cache()
+
+
+    # do host discovery
+    for host in z:
+        pass
+
+
+    # scan additional ports if requested
+    # only alive hosts are scanned
+    if options.ports:
+
+        # deduplicate ports
+        options.ports = list(set(options.ports))
+
+        # always scan 445 first so AV will have less of a chance to block us
+        if 445 in options.ports:
+            options.ports.remove(445)
+            options.ports = [445] + options.ports
+
+        for port in options.ports:
+            zmap_out_file, new_hosts_found = z.scan_online_hosts(port)
+            if new_hosts_found:
+                print('\n[+] Port scan results for {}/TCP written to {}'.format(port, zmap_out_file))
+
+
+    # run modules
+    z.run_modules()
+
+
+    # write CSV file
+    z.write_csv(csv_file=options.csv_file)
+
+    # print summary
+    z.report(netmask=options.netmask)
+
+    # print module reports
+    z.module_reports()
+
+    # calculate deltas if requested
+    if options.diff:
+        stray_hosts = []
+        stray_networks = []
+
+        stray_networks = z.get_network_delta(options.diff, netmask=options.netmask)
+        stray_networks_csv = './network_diff_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now())
+        print('')
+        print('[+] {:,} active network(s) not found in {}'.format(len(stray_networks), str(options.diff)))
+        print('[+] Full report written to {}'.format(stray_networks_csv))
+        print('=' * 60)
+
+        with open(stray_networks_csv, 'w', newline='') as f:
+            csv_file = csv.DictWriter(f, fieldnames=['Network', 'Host Count'])
+            csv_file.writeheader()
+
+            max_display_count = 20
+            for network in stray_networks:
+                #print('\t{:<16}{}'.format(str(network[0]), network[1]))
+                print('\t{:<19}{:<10}'.format(str(network[0]), ' ({:,})'.format(network[1])))
+                max_display_count -= 1
+                if max_display_count <= 0:
+                    print('\t...')
+                    break
+
+            for network in stray_networks:
+                csv_file.writerow({'Network': str(network[0]), 'Host Count': str(network[1])})
+
+        stray_hosts = z.get_host_delta(options.diff)
+        stray_hosts_csv = './host_diff_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now())
+        print('')
+        print('[+] {:,} alive host(s) not found in {}'.format(len(stray_hosts), str(options.diff)))
+        print('[+] Full report written to {}'.format(stray_hosts_csv))
+        print('=' * 60)
+
+        max_display_count = 20
+        for host in stray_hosts:
+            print('\t{}'.format(str(host)))
+            max_display_count -= 1
+            if max_display_count <= 0:
+                print('\t...')
+                break
+
+        z.write_csv(csv_file=stray_hosts_csv, hosts=stray_hosts)
+
+        # if more than 5 percent of hosts are strays, or you have more than one stray network
+        if len(z.hosts) > 0:
+            if len(stray_hosts)/len(z.hosts) > .05 or len(stray_networks) > 1:
+                print('')
+                print(' "Your asset management is bad and you should feel bad"')
+                print('\n')
+
+
+    # make a deliverable spreadsheet if requested
     if options.make_deliverable:
-        print('[+] Combining all data gathered to date for online hosts')
+
+        print('[+] Combining all data gathered to date for specified targets:')
+        print('     - {}'.format('\n     - '.join([str(t) for t in options.targets])))
 
         csv_files = []
         try:
@@ -80,157 +203,15 @@ def main(options):
         except StopIteration:
             pass
 
-        make_deliverable(csv_files)
+        filename = 'combined_asset_inventory_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now() )
 
+        deliverable = Deliverable(z, csv_files)
+        deliverable.generate_xlsx(filename)
 
-    else:
+    print('[+] CSV file written to {}'.format(options.csv_file))
 
-        z = Inventory(options.targets, options.bandwidth, resolve=(not options.no_dns), force_resolve=options.force_dns, \
-            work_dir=cache_dir, skip_ping=options.skip_ping, force_ping=options.force_ping, force_syn=options.force_syn, \
-            blacklist=options.blacklist, whitelist=options.whitelist, interface=options.interface, \
-            gateway_mac=options.gateway_mac)
-
-        def load_module(m, active=False):
-            z.modules.append(m)
-            if active:
-                z.active_modules.append(m)
-                try:
-                    options.ports += m.required_ports
-                except TypeError:
-                    options.ports = m.required_ports
-
-        for module in detected_modules:
-            module_name = 'lib.modules.{}'.format(module)
-            try:
-                #_m = importlib.import_module(module_name, package=__package__)
-                _m = importlib.import_module(module_name)
-                m = _m.Module(z)
-                load_module(m, active=(module in options.modules))
-            except ImportError as e:
-                sys.stderr.write('[!] Error importing {}:\n{}\n'.format(module_name, str(e)))
-                continue
-
-        # load modules
-        #modules_to_load = []
-        #if options.check_eternal_blue:
-        #    eb = EternalBlue(z)
-        #    load_module(eb)
-        # if options.check_default_ssh:
-        #     ssh = BruteSSH()
-        #     load_module(ssh)
-        #if options.check_open_vnc:
-        #     vnc = CheckOpenVNC(z)
-        #     load_module(vnc)
-        #if options.check_services:
-        #    try:
-        #        service_enum = EnumServices(z, ufail_limit=options.ufail_limit)
-        #        load_module(service_enum)
-        #    except ValueError as e:
-        #        sys.stderr.write('[!] {}\n'.format(str(e)))
-
-
-        # load cached hosts
-        z.load_scan_cache()
-
-
-        # do host discovery
-        for host in z:
-            pass
-
-        # check for default SSH creds
-        # if options.check_default_ssh:
-        #     try:
-        #         z.brute_ssh()
-        #     except PatatorError as e:
-        #         sys.stderr.write('\n[!] {}\n'.format(str(e)))
-
-        # scan additional ports if requested
-        # only alive hosts are scanned
-        if options.ports:
-
-            # deduplicate ports
-            options.ports = list(set(options.ports))
-
-            # always scan 445 first so AV will have less of a chance to block us
-            if 445 in options.ports:
-                options.ports.remove(445)
-                options.ports = [445] + options.ports
-
-            for port in options.ports:
-                zmap_out_file, new_hosts_found = z.scan_online_hosts(port)
-                if new_hosts_found:
-                    print('\n[+] Port scan results for {}/TCP written to {}'.format(port, zmap_out_file))
-
-
-        # run modules
-        z.run_modules()
-
-
-        # write CSV file
-        z.write_csv(csv_file=options.csv_file)
-
-        # print summary
-        z.report(netmask=options.netmask)
-
-        # print module reports
-        z.module_reports()
-
-        # calculate deltas if requested
-        if options.diff:
-            stray_hosts = []
-            stray_networks = []
-
-            stray_networks = z.get_network_delta(options.diff, netmask=options.netmask)
-            stray_networks_csv = './network_diff_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now())
-            print('')
-            print('[+] {:,} active network(s) not found in {}'.format(len(stray_networks), str(options.diff)))
-            print('[+] Full report written to {}'.format(stray_networks_csv))
-            print('=' * 60)
-
-            with open(stray_networks_csv, 'w', newline='') as f:
-                csv_file = csv.DictWriter(f, fieldnames=['Network', 'Host Count'])
-                csv_file.writeheader()
-
-                max_display_count = 20
-                for network in stray_networks:
-                    #print('\t{:<16}{}'.format(str(network[0]), network[1]))
-                    print('\t{:<19}{:<10}'.format(str(network[0]), ' ({:,})'.format(network[1])))
-                    max_display_count -= 1
-                    if max_display_count <= 0:
-                        print('\t...')
-                        break
-
-                for network in stray_networks:
-                    csv_file.writerow({'Network': str(network[0]), 'Host Count': str(network[1])})
-
-            stray_hosts = z.get_host_delta(options.diff)
-            stray_hosts_csv = './host_diff_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now())
-            print('')
-            print('[+] {:,} alive host(s) not found in {}'.format(len(stray_hosts), str(options.diff)))
-            print('[+] Full report written to {}'.format(stray_hosts_csv))
-            print('=' * 60)
-
-            max_display_count = 20
-            for host in stray_hosts:
-                print('\t{}'.format(str(host)))
-                max_display_count -= 1
-                if max_display_count <= 0:
-                    print('\t...')
-                    break
-
-            z.write_csv(csv_file=stray_hosts_csv, hosts=stray_hosts)
-
-            # if more than 5 percent of hosts are strays, or you have more than one stray network
-            if len(z.hosts) > 0:
-                if len(stray_hosts)/len(z.hosts) > .05 or len(stray_networks) > 1:
-                    print('')
-                    print(' "Your asset management is bad and you should feel bad"')
-                    print('\n')
-
-        print('[+] CSV file written to {}'.format(options.csv_file))
-
-        z.stop()
-        z.dump_scan_cache()
+    z.stop()
+    z.dump_scan_cache()
 
 
 
@@ -252,80 +233,7 @@ def parse_target_args(targets):
 
 
 
-def make_deliverable(csv_files):
-    '''
-    takes a list of asset inventory CSV files and combines them
-    writes to a new CSV file in the current directory
-    '''
 
-    try:
-        import openpyxl
-    except ImportError:
-        sys.stderr.write('\n[!] Please run "python3 -m pip install openpyxl"\n\n')
-        return
-
-    hosts = dict()
-    fieldnames = []
-
-    for file in csv_files:
-        try:
-            with open(file, newline='') as f:
-
-                c = csv.DictReader(f)
-
-                if not fieldnames:
-                    fieldnames = ['IP Address', 'Hostname', 'Open Ports']
-
-                for field in c.fieldnames:
-                    if not field in fieldnames and not field.lower().endswith('/tcp'):
-                        fieldnames.append(field)
-
-                for row in c:
-
-                    row = dict(row)
-                    ports = set()
-                    ip = ipaddress.ip_address(row['IP Address'])
-
-                    for k in list(row):
-                        if k.lower().endswith('/tcp'):
-                            try:
-                                ports.add(int(row.pop(k).split('/')[0]))
-                            except ValueError:
-                                continue
-
-                    try:
-                        ports.update(hosts[ip]['Open Ports'])
-                        for k,v in row.items():
-                            if v and not v.lower() in ['unknown', 'n/a', 'closed']:
-                                # skip if the cell isn't empty
-                                if k in hosts[ip]:
-                                    if hosts[ip][k] and not hosts[ip][k].lower() in ['unknown', 'n/a', 'closed']:
-                                        continue
-                                hosts[ip].update({k: v})
-
-                    except KeyError:
-                        hosts[ip] = row
-
-                    finally:
-                        hosts[ip].update({'Open Ports': ports})
-
-        except KeyError:
-            sys.stderr.write('[!] Error combining {}\n'.format(file))
-            continue
-        
-
-    out_filename = 'combined_asset_inventory_{date:%Y-%m-%d_%H-%M-%S}.csv'.format( date=datetime.now() )
-    print('[+] Writing combined list to {}'.format(out_filename))
-    with open(out_filename, newline='', mode='w') as f:
-        c = csv.DictWriter(f, fieldnames=fieldnames)
-        c.writeheader()
-        hosts = list(hosts.items())
-        hosts.sort(key=lambda x: x[0])
-        for ip, host in hosts:
-            host['Open Ports'] = list(host['Open Ports'])
-            host['Open Ports'].sort()
-            host['Open Ports'] = ', '.join([str(p) for p in hosts['Open Ports']])
-            c.writerow(host)
 
 
 
