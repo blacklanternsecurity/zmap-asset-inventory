@@ -84,6 +84,8 @@ class Inventory:
         if self.zmap_ping_targets and not self.primary_zmap_started and \
             ((not self.skip_ping) or (self.force_ping)):
 
+            self._check_root()
+
             self.primary_zmap_started = True
 
             zmap_command = ['zmap', '--cooldown-time=3', '--blacklist-file={}'.format(self.blacklist_arg), \
@@ -150,6 +152,7 @@ class Inventory:
                 sys.stderr.write('\n'.join([('     - ' + str(e)) for e in progs_to_install]) + '\n\n')
 
         for module in self.active_modules:
+            self._check_root()
             module.run(self)
 
 
@@ -259,6 +262,8 @@ class Inventory:
             return (None, 0)
 
         else:
+
+            self._check_root()
 
             zmap_command = ['zmap', '--cooldown-time=3', '--blacklist-file={}'.format(self.blacklist_arg), \
                 '--bandwidth={}'.format(self.bandwidth), '--target-port={}'.format(port)] + \
@@ -781,6 +786,12 @@ class Inventory:
 
         return False
 
+
+    def _check_root(self):
+
+        if os.geteuid() != 0:
+            sys.stderr.write('[!] Must be root\n')
+            sys.exit(2)
 
 
     def __iter__(self):

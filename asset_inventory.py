@@ -37,10 +37,6 @@ for file in module_candidates:
 
 def main(options):
 
-    if os.geteuid() != 0:
-        sys.stderr.write('[!] Must be root\n')
-        sys.exit(2)
-
     # make sure blacklist and whitelist exist
     if options.blacklist:
         assert Path(options.blacklist).resolve().is_file(), 'Problem reading blacklist file "{}"'.format(str(options.blacklist))
@@ -126,7 +122,10 @@ def main(options):
 
 
     # write CSV file
-    z.write_csv(csv_file=options.csv_file)
+    try:
+        z.write_csv(csv_file=options.csv_file)
+    except PermissionError as e:
+        pass
 
     # print summary
     z.report(netmask=options.netmask)
@@ -211,7 +210,10 @@ def main(options):
     print('[+] CSV file written to {}'.format(options.csv_file))
 
     z.stop()
-    z.dump_scan_cache()
+    try:
+        z.dump_scan_cache()
+    except PermissionError as e:
+        pass
 
 
 
