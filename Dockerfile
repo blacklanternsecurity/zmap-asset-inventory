@@ -29,6 +29,10 @@ RUN wget https://svn.nmap.org/nmap/scripts/smb-vuln-ms17-010.nse
 WORKDIR /opt
 RUN git clone https://github.com/lanjelot/patator.git
 WORKDIR /opt/patator
+
+# FIX VNC-INFO SCRIPT
+RUN sed -i 's/table.insert( vncsec.types, string.unpack("B", tmp, i) )/table.insert( vncsec.types, (string.unpack("B", tmp, i)) )/g' /usr/share/nmap/nselib/vnc.lua
+
 # RUN python2 -m pip install -r requirements.txt
 RUN cat requirements.txt | xargs -n 1 python2 -m pip install || true
 RUN ln -s  /opt/patator/patator.py /usr/bin/patator
