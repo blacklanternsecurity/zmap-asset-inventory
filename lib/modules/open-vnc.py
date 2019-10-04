@@ -54,11 +54,11 @@ class Module(BaseModule):
                 print('\n[+] No systems to scan for open VNC on port {}'.format(port))
 
             else:
-                print('\n[+] Scanning {:,} systems for open VNC on port {}\n'.format(valid_targets, port))
-
                 command = ['nmap', '-p{}'.format(port), '-T4', '-n', '-Pn', '-v', '-sV', \
                     '--script=vnc-info', '-oA', output_file, \
                     '-iL', targets_file]
+
+                print('\n[+] Scanning {:,} systems for open VNC on port {}:\n\t> {}\n'.format(valid_targets, ports, ' '.join(command)))
 
                 try:
                     self.process = sp.run(command, check=True)

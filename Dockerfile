@@ -11,7 +11,7 @@
 #   $ ./zmap-asset-inventory -t 10.0.0.0/8
 #
 
-FROM ubuntu:16.04
+FROM kalilinux/kali-linux-docker
 
 # INSTALL DUMB-INIT
 RUN apt-get -y update
@@ -23,7 +23,7 @@ RUN pip install dumb-init
 RUN apt-get -y install zmap
 
 # INSTALL NMAP + SCRIPTS, PING, TRACEROUTE, VNCSNAPSHOT, GIT, PATATOR, VIM, ADD-APT-REPOSITORY
-RUN apt-get -y install iputils-ping net-tools git nmap vncsnapshot wget vim libcurl4-openssl-dev libssl-dev software-properties-common
+RUN apt-get -y install iputils-ping net-tools git nmap vncsnapshot wget vim libcurl4-openssl-dev libssl-dev
 WORKDIR /usr/share/nmap/scripts
 RUN wget https://svn.nmap.org/nmap/scripts/smb-vuln-ms17-010.nse
 WORKDIR /opt
@@ -48,24 +48,13 @@ WORKDIR /
 RUN rm -r /opt/impacket
 
 # INSTALL PYTHON 3.7
-RUN add-apt-repository -y ppa:deadsnakes/ppa
-RUN apt-get -y update
 RUN apt-get -y install python3.7 python3-pip
-# RUN apt-get -y install zlib1g-dev libffi-dev
-# WORKDIR /usr/src
-# RUN wget https://www.python.org/ftp/python/3.7.3/Python-3.7.3.tgz
-# RUN tar xzf Python-3.7.3.tgz
-# WORKDIR /usr/src/Python-3.7.3
-# RUN ./configure --enable-optimizations
-# RUN make altinstall
-# WORKDIR /root
-# RUN rm -rf /usr/src/Python-3.7.3
 
 # INSTALL PYTHON 3 PACKAGES
 RUN python3 -m pip install openpyxl
 
 # INSTALL ZMAP ASSET INVENTORY
 RUN git clone https://github.com/blacklanternsecurity/zmap-asset-inventory
-WORKDIR /root/zmap-asset-inventory
+WORKDIR /zmap-asset-inventory
 
 ENTRYPOINT ["dumb-init", "/bin/bash"]
