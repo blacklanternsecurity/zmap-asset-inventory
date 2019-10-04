@@ -58,7 +58,7 @@ class Module(BaseModule):
                     '--script=vnc-info', '-oA', output_file, \
                     '-iL', targets_file]
 
-                print('\n[+] Scanning {:,} systems for open VNC on port {}:\n\t> {}\n'.format(valid_targets, ports, ' '.join(command)))
+                print('\n[+] Scanning {:,} systems for open VNC on port {}:\n\t> {}\n'.format(valid_targets, port, ' '.join(command)))
 
                 try:
                     self.process = sp.run(command, check=True)
