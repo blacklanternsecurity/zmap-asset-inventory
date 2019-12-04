@@ -265,7 +265,7 @@ if __name__ == '__main__':
     parser.add_argument('--work-dir', type=Path,    default=default_work_dir,   help='custom working directory (default {})'.format(default_work_dir), metavar='DIR')
     parser.add_argument('-d', '--diff',             type=Path,                  help='show differences between scan results and IPs/networks from file', metavar='FILE')
     parser.add_argument('--netmask',      type=int, default=default_cidr_mask,  help='summarize networks with this CIDR mask (default {})'.format(default_cidr_mask))
-    parser.add_argument('--make-deliverable',       action='store_true',        help='combine all data gathered for each host into a deliverable XLSX file')
+    parser.add_argument('--make-deliverable',       action='store_true',        help='combine all data gathered for each host into a deliverable CSV file')
 
     try:
 

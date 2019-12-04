@@ -57,7 +57,7 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
     - A report is automatically generated after each run
         - They are saved in the working directory (default: ~/.asset_inventory)
     - To combine all past reports:
-        - `$ ./asset_inventory.py --combine`
+        - `$ ./asset_inventory.py --make-deliverable`
         - A combined CSV file will be created in the current directory
 
 
@@ -67,9 +67,9 @@ Python script which takes internal asset inventory at scale using zmap.  Outputs
 usage: asset_inventory.py [-h] [-t STR [STR ...]] [-p PORTS [PORTS ...]] [-n]
                           [--force-dns] [-B STR] [-i IFC] [-G MAC]
                           [--blacklist FILE] [--whitelist FILE] [-w CSV_FILE]
-                          [-f] [-Pn] [--force-ping]
+                          [-f] [-Pn] [--force-ping] [--force-syn]
                           [-M [MODULES [MODULES ...]]] [--work-dir DIR]
-                          [-d FILE] [--netmask NETMASK] [--combine-all-assets]
+                          [-d FILE] [--netmask NETMASK] [--make-deliverable]
 
 Assess the security posture of an internal network
 
@@ -92,20 +92,21 @@ optional arguments:
                         will be scanned
   -w CSV_FILE, --csv-file CSV_FILE
                         output CSV file
-  -f, --start-fresh     don't load results from previous scans
+  -f, --start-fresh     discard cached data (a backup is made)
   -Pn, --skip-ping      skip zmap host-discovery
   --force-ping          force a new zmap ping sweep
+  --force-syn           SYN scan hosts which have already been scanned
   -M [MODULES [MODULES ...]], --modules [MODULES [MODULES ...]]
                         Module for additional checks such as EternalBlue (pick
-                        from eternalblue, open-vnc, open-shares, default-ssh,
-                        enum-services, all, *)
+                        from default-ssh, open-shares, eternalblue, enum-
+                        services, open-vnc, all, *)
   --work-dir DIR        custom working directory (default
-                        /home/bls/.asset_inventory)
+                        /home/groot/.asset_inventory)
   -d FILE, --diff FILE  show differences between scan results and IPs/networks
                         from file
   --netmask NETMASK     summarize networks with this CIDR mask (default 16)
-  --combine-all-assets  combine all previous results and save in current
-                        directory
+  --make-deliverable    combine all data gathered for each host into a
+                        deliverable CSV file
 ~~~
 
 ## NOTE: For best results, run in a Docker container
