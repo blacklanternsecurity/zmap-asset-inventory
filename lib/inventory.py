@@ -417,12 +417,11 @@ class Inventory:
                     print('     {}'.format(str(e)))
 
 
-        hosts = [ipaddress.ip_address(i) for i in self.hosts]
+        host_nets = set([ipaddress.ip_network((i, netmask), strict=False) for i in self.hosts])
 
         stray_networks = dict()
-        for h in hosts:
-            if not any([h in s for s in sub_ranges]):
-                host_net = ipaddress.ip_network((h, netmask), strict=False)
+        for host_net in host_nets:
+            if not any([self._net_in_net(host_net, s) in s for s in sub_ranges]):
                 try:
                     stray_networks[host_net] += 1
                 except KeyError:
@@ -792,6 +791,15 @@ class Inventory:
         if os.geteuid() != 0:
             sys.stderr.write('[!] Must be root\n')
             sys.exit(2)
+
+
+    @staticmethod
+    def _net_in_net(net1, net2):
+        '''
+        return True if net1 is included in net2
+        both args must be ip_network objects
+        '''
+        return net1.network_address in net2 and net1.broadcast_address in net2
 
 
     def __iter__(self):
