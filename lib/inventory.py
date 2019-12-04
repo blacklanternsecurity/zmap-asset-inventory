@@ -423,7 +423,6 @@ class Inventory:
 
 
         hosts = set([ipaddress.ip_address(i) for i in self.hosts])
-        print(sub_ranges)
 
         stray_networks = dict()
         for h in hosts:
