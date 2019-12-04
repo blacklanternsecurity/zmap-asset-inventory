@@ -406,22 +406,29 @@ class Inventory:
         '''
 
         sub_ranges = set()
+        host_mask = ipaddress.ip_address('255.255.255.255')
         with open(sub_host_file) as f:
             lines = [line.strip() for line in f.readlines()]
             for line in lines:
                 try:
                     for network in str_to_network(line):
-                        sub_ranges.add(ipaddress.ip_network((network.network_address, netmask), strict=False))
+                        if network.netmask == host_mask:
+                            sub_ranges.add(ipaddress.ip_network((network.network_address, netmask), strict=False))
+                        else:
+                            sub_ranges.add(network)
+
                 except ValueError as e:
                     print('[!] Bad entry in {}:'.format(str(sub_host_file)))
                     print('     {}'.format(str(e)))
 
 
-        host_nets = set([ipaddress.ip_network((i, netmask), strict=False) for i in self.hosts])
+        hosts = set([ipaddress.ip_address(i) for i in self.hosts])
+        print(sub_ranges)
 
         stray_networks = dict()
-        for host_net in host_nets:
-            if not any([self._net_in_net(host_net, s) in s for s in sub_ranges]):
+        for h in hosts:
+            host_net = ipaddress.ip_network((h, netmask), strict=False)
+            if not any([self._net_in_net(host_net, s) for s in sub_ranges]):
                 try:
                     stray_networks[host_net] += 1
                 except KeyError:
