@@ -37,22 +37,22 @@ RUN sed -i 's/table.insert( vncsec.types, string.unpack("B", tmp, i) )/table.ins
 RUN cat requirements.txt | xargs -n 1 python2 -m pip install || true
 RUN ln -s  /opt/patator/patator.py /usr/bin/patator
 
+# INSTALL PYTHON 3.7
+RUN apt-get -y install python3.7 python3-pip
+
 # INSTALL IMPACKET
 RUN apt-get -y install
-RUN python2 -m pip install pipenv
+RUN python3 -m pip install pipenv
 RUN rm -r $(ls /root/.local/share/virtualenvs | grep impacket | head -n 1) &>/dev/null
 RUN rm -r /opt/impacket &>/dev/null
 WORKDIR /opt
 RUN git clone https://github.com/CoreSecurity/impacket.git
 WORKDIR /opt/impacket
-RUN python2 -m pipenv install
-RUN python2 -m pipenv run python setup.py install
+RUN python3 -m pipenv install
+RUN python3 -m pipenv run python setup.py install
 RUN ln -s ~/.local/share/virtualenvs/$(ls /root/.local/share/virtualenvs | grep impacket | head -n 1)/bin/*.py /usr/bin/
 WORKDIR /
 RUN rm -r /opt/impacket
-
-# INSTALL PYTHON 3.7
-RUN apt-get -y install python3.7 python3-pip
 
 # INSTALL PYTHON 3 PACKAGES
 RUN python3 -m pip install openpyxl
