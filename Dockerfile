@@ -11,7 +11,7 @@
 #   $ ./zmap-asset-inventory -t 10.0.0.0/8
 #
 
-FROM kalilinux/kali-linux-docker
+FROM kalilinux/kali
 
 # INSTALL DUMB-INIT
 RUN apt-get -y update
