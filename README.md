@@ -122,6 +122,7 @@ Zmap has trouble scanning the local subnet, which can be fixed by using Docker's
     ~~~
 1. Start scan with desired options
     ~~~
+    # NOTE: you may need to ping 8.8.8.8 (or any IP) so the MAC of the gateway is populated in the ARP cache
     $ ./zmap-asset-inventory -t 10.0.0.0/8
     ~~~
 1. (Optional) Change the default Docker network if it overlaps with any of your target subnets

@@ -288,6 +288,9 @@ class Module(BaseModule):
 
 
 class wmiexec:
+    '''
+    Can be used with any of the impacket execution methods (smbexec, atexec, etc.)
+    '''
 
     def __init__(self, target, config):
 
@@ -297,8 +300,10 @@ class wmiexec:
         self.domain   = config['CREDENTIALS']['domain']
         self.hashes   = config['CREDENTIALS']['hashes']
         self.services = config['SERVICES']
+        self.timeout  = config['TIMEOUT']
+        self.method   = config['METHOD']
 
-        self.wmi_auth = ''
+        self.impacket_auth = ''
 
         self.raw_output = ''
 
@@ -310,13 +315,13 @@ class wmiexec:
                     self.target = target.hostname
                 else:
                     raise ValueError('Ticket authentication needs valid hostname, none found for {}, skipping'.format(str(target['IP Address'])))                
-                self.wmi_auth = ['-k', '-no-pass', '{}/{}@{}'.format(self.domain, self.username, str(self.target))]
+                self.impacket_auth = ['-k', '-no-pass', '{}/{}@{}'.format(self.domain, self.username, str(self.target))]
             except KeyError:
                 raise ValueError('Kerberos ticket not found, please export "KRB5CCNAME" variable')
         elif self.password:
-            self.wmi_auth = ['{}/{}:{}@{}'.format(self.domain, self.username, self.password, self.target)]
+            self.impacket_auth = ['{}/{}:{}@{}'.format(self.domain, self.username, self.password, self.target)]
         elif self.hashes:
-            self.wmi_auth = ['-hashes', self.hashes, '{}/{}@{}'.format(self.domain, self.username, self.target)]
+            self.impacket_auth = ['-hashes', self.hashes, '{}/{}@{}'.format(self.domain, self.username, self.target)]
         else:
             raise ValueError('Specified authentication method not valid.  Please check services.config.')
 
@@ -370,17 +375,23 @@ class wmiexec:
 
 
 
-    def run_wmiexec(self, command, timeout=10):
+    def run_wmiexec(self, command, method=None, timeout=None):
 
-        wmiexec_base = ['wmiexec.py'] + self.wmi_auth
-        wmiexec_command = wmiexec_base + [command]
+        if timeout is None:
+            timeout = self.timeout
 
-        print(' >> ' + ' '.join(wmiexec_base) + " '{}'".format(command))
+        if method is None:
+            method = self.method
+
+        exec_base = [method] + self.impacket_auth
+        exec_command = exec_base + [command]
+
+        print(' >> ' + ' '.join(exec_base) + " '{}'".format(command))
         try:
             env = dict(os.environ, PYTHONIOENCODING='UTF-8')
-            wmiexec_process = sp.run(wmiexec_command, stdout=sp.PIPE, stderr=sp.PIPE, timeout=timeout, env=env)
-            self.raw_stdout = wmiexec_process.stdout.decode()
-            self.raw_stderr = wmiexec_process.stderr.decode()
+            exec_process = sp.run(exec_command, stdout=sp.PIPE, stderr=sp.PIPE, timeout=timeout, env=env)
+            self.raw_stdout = exec_process.stdout.decode()
+            self.raw_stderr = exec_process.stderr.decode()
             return (self.raw_stdout, self.raw_stderr)
         except sp.TimeoutExpired:
-            raise ServiceEnumException('wmiexec timed out:\n{}'.format(' '.join(wmiexec_command)))
+            raise ServiceEnumException(f'{method} timed out:\n{" ".join(exec_command)}')
