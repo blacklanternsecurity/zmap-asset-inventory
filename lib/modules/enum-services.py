@@ -72,6 +72,7 @@ class Module(BaseModule):
                         futures.append(executor.submit(self.get_services, host))
                         sleep(.75)
 
+                    sleep(10)
                     executor.shutdown(wait=True)
 
                     for ip, services in self.services.items():
