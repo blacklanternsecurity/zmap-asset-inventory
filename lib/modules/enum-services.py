@@ -55,7 +55,7 @@ class Module(BaseModule):
         try:
             # set up threading
             futures = []
-            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.threads) as executor:
 
                 hosts_to_scan = list([h for h in inventory if 445 in h.open_ports])
 
@@ -259,6 +259,7 @@ class Module(BaseModule):
             if not config:
                 raise KeyError('Error parsing config file')
 
+            self.threads = int(config['EXECUTION']['THREADS'])
             self.ufail_limit = int(config['CREDENTIALS']['consecutivefailedlogonlimit'])
 
             # make sure we have credentials
