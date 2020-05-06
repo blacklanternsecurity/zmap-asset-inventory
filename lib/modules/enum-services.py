@@ -300,8 +300,8 @@ class wmiexec:
         self.domain   = config['CREDENTIALS']['domain']
         self.hashes   = config['CREDENTIALS']['hashes']
         self.services = config['SERVICES']
-        self.timeout  = config['TIMEOUT']
-        self.method   = config['METHOD']
+        self.timeout  = config['EXECUTION']['TIMEOUT']
+        self.method   = config['EXECUTION']['METHOD']
 
         self.impacket_auth = ''
 
