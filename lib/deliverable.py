@@ -38,9 +38,10 @@ class Deliverable:
                     if not fieldnames:
                         fieldnames = ['IP Address', 'Hostname', 'Open Ports']
 
-                    for field in c.fieldnames:
-                        if not field in fieldnames and not field.lower().endswith('/tcp'):
-                            fieldnames.append(field)
+                    if c.fieldnames:
+                        for field in c.fieldnames:
+                            if not field in fieldnames and not field.lower().endswith('/tcp'):
+                                fieldnames.append(field)
 
                     for row in c:
 
