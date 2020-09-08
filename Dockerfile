@@ -37,8 +37,8 @@ RUN sed -i 's/table.insert( vncsec.types, string.unpack("B", tmp, i) )/table.ins
 RUN cat requirements.txt | xargs -n 1 python2 -m pip install || true
 RUN ln -s  /opt/patator/patator.py /usr/bin/patator
 
-# INSTALL PYTHON 3.7
-RUN apt-get -y install python3.7 python3-pip
+# INSTALL PYTHON 3
+RUN apt-get -y install python3 python3-pip
 
 # INSTALL IMPACKET
 RUN apt-get -y install
