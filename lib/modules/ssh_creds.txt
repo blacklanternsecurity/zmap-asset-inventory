@@ -1,4 +1,8 @@
 root:calvin
+oracle:oracle
+operator:operator
+hcom:hcom
+cluster:cluster
 grpadmin:grpadmin
 root:root
 root:toor
