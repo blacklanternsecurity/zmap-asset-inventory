@@ -89,9 +89,9 @@ class Module(BaseModule):
                     with open(self.raw_output_file, 'w') as f:
                         for ip, output in self.raw_wmiexec_output.items():
                             f.write(str(ip) + '\n')
-                            f.write('=' * 5 + '\n')
+                            f.write('*' * 5 + '\n')
                             f.write(str(output) + '\n')
-                            f.write('==' + '\n')
+                            f.write('=' * 5 + '\n')
             except (NameError, UnboundLocalError):
                 pass
 
@@ -302,7 +302,7 @@ class wmiexec:
         self.domain   = config['CREDENTIALS']['domain']
         self.hashes   = config['CREDENTIALS']['hashes']
         self.services = config['SERVICES']
-        self.timeout  = config['EXECUTION']['TIMEOUT']
+        self.timeout  = int(config['EXECUTION']['TIMEOUT'])
         self.method   = config['EXECUTION']['METHOD']
 
         self.impacket_auth = ''
