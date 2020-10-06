@@ -29,6 +29,7 @@ RUN wget https://svn.nmap.org/nmap/scripts/smb-vuln-ms17-010.nse
 WORKDIR /opt
 RUN git clone https://github.com/lanjelot/patator.git
 WORKDIR /opt/patator
+RUN pip3 install paramiko
 
 # FIX VNC-INFO SCRIPT
 RUN sed -i 's/table.insert( vncsec.types, string.unpack("B", tmp, i) )/table.insert( vncsec.types, (string.unpack("B", tmp, i)) )/g' /usr/share/nmap/nselib/vnc.lua
