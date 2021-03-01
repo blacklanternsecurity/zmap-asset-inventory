@@ -16,7 +16,7 @@ FROM kalilinux/kali
 # INSTALL DUMB-INIT
 RUN apt-get -y update
 RUN apt-get -y upgrade
-RUN apt-get -y install python-dev python-pip
+RUN apt-get -y install python-dev python3-pip
 RUN pip install dumb-init
 
 # INSTALL ZMAP
