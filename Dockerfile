@@ -11,19 +11,21 @@
 #   $ ./zmap-asset-inventory -t 10.0.0.0/8
 #
 
-FROM kalilinux/kali
+FROM kalilinux/kali-last-release
 
 # INSTALL DUMB-INIT
 RUN apt-get -y update
 RUN apt-get -y upgrade
-RUN apt-get -y install python-dev python3-pip
+RUN apt-get -y install python3-dev python3-pip
 RUN pip install dumb-init
 
 # INSTALL ZMAP
 RUN apt-get -y install zmap
 
 # INSTALL NMAP + SCRIPTS, PING, TRACEROUTE, VNCSNAPSHOT, GIT, PATATOR, VIM, ADD-APT-REPOSITORY
-RUN apt-get -y install iputils-ping net-tools git nmap vncsnapshot wget vim libcurl4-openssl-dev libssl-dev
+RUN apt-get -y install iputils-ping net-tools git nmap wget vim libcurl4-openssl-dev libssl-dev
+WORKDIR /usr/bin
+RUN wget https://master.dl.sourceforge.net/project/vncsnapshot/vncsnapshot/1.2a/vncsnapshot-1.2a-Linux-x86.tar.gz -O - | tar -xz --strip-components 2 vncsnapshot-1.2a/bin/vncsnapshot vncsnapshot-1.2a/bin/vncpasswd
 WORKDIR /usr/share/nmap/scripts
 RUN wget https://svn.nmap.org/nmap/scripts/smb-vuln-ms17-010.nse
 WORKDIR /opt
